@@ -4,5 +4,5 @@
 
 ## spec
 
-* Ubuntu
-* MySQL Shell
+*   Ubuntu
+*   MySQL Shell
