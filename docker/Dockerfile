@@ -2,7 +2,7 @@ FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV _UBUNTU_VERSION=22.04
-ENV _MYSQL_SHELL_VERSION=8.0.32
+ENV _MYSQL_SHELL_VERSION=8.0.33
 
 RUN apt update \
     && apt install -y curl python3 \
