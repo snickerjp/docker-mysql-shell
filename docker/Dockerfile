@@ -1,5 +1,6 @@
-FROM ubuntu:mantic-20231128
+FROM ubuntu:mantic-20240216
 
+# Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
 ENV _UBUNTU_VERSION=23.10
 ENV _MYSQL_SHELL_VERSION=8.0.36
