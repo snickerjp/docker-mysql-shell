@@ -1,4 +1,4 @@
-FROM ubuntu:jammy-20240530
+FROM ubuntu:jammy-20240627.1
 
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
