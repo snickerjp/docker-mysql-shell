@@ -1,8 +1,8 @@
-FROM ubuntu:mantic-20240405
+FROM ubuntu:noble-20241011
 
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
-ENV _UBUNTU_VERSION=23.10
+ENV _UBUNTU_VERSION=24.04
 ENV _MYSQL_SHELL_VERSION=8.3.0
 
 RUN apt update \
