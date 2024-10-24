@@ -1,9 +1,9 @@
-FROM ubuntu:jammy-20240911.1
+FROM ubuntu:noble-20241011
 
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
-ENV _UBUNTU_VERSION=22.04
-ENV _MYSQL_SHELL_VERSION=8.0.36
+ENV _UBUNTU_VERSION=24.04
+ENV _MYSQL_SHELL_VERSION=8.4.3
 
 RUN apt update \
     && apt install -y curl python3 \
