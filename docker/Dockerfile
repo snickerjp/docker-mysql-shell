@@ -1,4 +1,4 @@
-FROM ubuntu:noble-20241011
+FROM ubuntu:noble-20241015
 
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
