@@ -30,10 +30,10 @@ jobs:
         include:
           - series: innovation
             version: 9.2
-            extra_tag: innovation
+            extra_tag: Innovation
           - series: lts
             version: 8.4
-            extra_tag: lts
+            extra_tag: LTS
 
     steps:
       - uses: actions/checkout@v4
