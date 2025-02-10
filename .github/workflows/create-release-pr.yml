@@ -1,0 +1,42 @@
+name: Create Release PR
+
+on:
+  push:
+    branches:
+      - develop
+    paths-ignore:
+      - "**.md"
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  create-release-pr:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: 3.2
+          bundler-cache: true
+
+      - name: Configure Git
+        run: |
+          git config --global user.email github-actions[bot]@users.noreply.github.com
+          git config --global user.name github-actions[bot]
+
+      - name: Install git-pr-release
+        run: gem install git-pr-release --no-document
+
+      - name: Create Release PR
+        env:
+          GIT_PR_RELEASE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GIT_PR_RELEASE_BRANCH_PRODUCTION: main
+          GIT_PR_RELEASE_BRANCH_STAGING: develop
+          GIT_PR_RELEASE_TEMPLATE: .github/pr-release/template.erb
+          GIT_PR_RELEASE_LABELS: release
+        run: git-pr-release

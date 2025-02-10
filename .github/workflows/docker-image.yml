@@ -24,9 +24,11 @@ jobs:
       matrix:
         include:
           - series: innovation
-            version: "9.2"
+            version: 9.2
+            extra_tag: innovation
           - series: lts
-            version: "8.4"
+            version: 8.4
+            extra_tag: lts
     steps:
       - name: Check out the repo
         uses: actions/checkout@v4

@@ -62,3 +62,30 @@ docker run -it snickerjp/docker-mysql-shell:innovation --uri mysql://user:pass@h
 docker run -it snickerjp/docker-mysql-shell:8.4 --uri mysql://user:pass@host:port/schema
 # or using lts tag
 docker run -it snickerjp/docker-mysql-shell:lts --uri mysql://user:pass@host:port/schema
+```
+
+## Development Workflow
+
+### Branch Strategy
+
+- `feat-*`: Feature branches for new features and improvements
+- `develop`: Integration branch for feature branches
+- `main`: Release branch
+
+### Pull Request Process
+
+1. Create a new feature branch from `develop`:
+```bash
+git checkout develop
+git pull origin develop
+git checkout -b feat-your-feature-name
+```
+
+2. Make your changes and create a PR to `develop`
+3. After PR is merged to `develop`, it will be included in the next release PR
+4. Release PRs are automatically created from `develop` to `main` using git-pr-release
+
+### Protected Branches
+
+- `develop`: Requires PR review and successful status checks
+- `main`: Protected release branch, only accepts PRs from `develop`
