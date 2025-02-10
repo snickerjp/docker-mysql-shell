@@ -7,7 +7,7 @@ ARG MYSQL_SHELL_VERSION=8.4.4
 RUN useradd -ms /bin/bash mysqlshelluser
 
 RUN apt-get update && apt-get install -y \
-    wget \
+    wget=1.21.* \
     && rm -rf /var/lib/apt/lists/* \
     && wget https://dev.mysql.com/get/Downloads/MySQL-Shell/mysql-shell_${MYSQL_SHELL_VERSION}-1debian12_amd64.deb \
     && apt-get update \

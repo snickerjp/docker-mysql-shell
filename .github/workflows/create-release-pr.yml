@@ -8,7 +8,10 @@ on:
       - "**.md"
   workflow_dispatch:
 
-permissions: read-all
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
 
 jobs:
   create-release-pr:
@@ -24,16 +27,19 @@ jobs:
           ruby-version: 3.2
           bundler-cache: true
 
+      - name: Install dependencies
+        run: |
+          gem install faraday-retry
+          gem install git-pr-release --no-document
+
       - name: Configure Git
         run: |
-          git config --global user.email github-actions[bot]@users.noreply.github.com
-          git config --global user.name github-actions[bot]
-
-      - name: Install git-pr-release
-        run: gem install git-pr-release --no-document
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
 
       - name: Create Release PR
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GIT_PR_RELEASE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GIT_PR_RELEASE_BRANCH_PRODUCTION: main
           GIT_PR_RELEASE_BRANCH_STAGING: develop
