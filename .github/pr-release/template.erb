@@ -1,0 +1,15 @@
+# Release <%= Time.now.strftime("%Y-%m-%d %H:%M:%S") %>
+
+## Pull Requests
+
+<% pull_requests.each do |pr| -%>
+- [ ] #<%= pr.number %> <%= pr.title %> (@<%= pr.author %>)
+<% end -%>
+
+## Post Release Tasks
+
+```bash
+git checkout <%= production_branch %>
+git pull origin <%= production_branch %>
+git tag $(date +"%Y%m%d_%H%M%S")
+git push origin $(date +"%Y%m%d_%H%M%S")

@@ -1,18 +1,22 @@
 name: Build MySQL Shell Docker Images
 
-# Add explicit permissions
 permissions:
   contents: read
   packages: write
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+      - develop
+      - feat-*
     paths:
       - docker/**
       - .github/workflows/docker-build.yml
   pull_request:
-    branches: [ main ]
+    branches:
+      - main
+      - develop
     paths:
       - docker/**
       - .github/workflows/docker-build.yml
@@ -47,7 +51,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ./docker/${{ matrix.series }}
-          push: ${{ github.event_name != 'pull_request' }}
+          push: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
           tags: |
             snickerjp/docker-mysql-shell:${{ matrix.version }}
             snickerjp/docker-mysql-shell:${{ matrix.extra_tag }}
