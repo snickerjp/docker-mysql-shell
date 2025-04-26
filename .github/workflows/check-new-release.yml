@@ -1,27 +1,27 @@
 name: Check for new MySQL Shell releases
 
-# このワークフローは以下を行います：
-# 1. MySQL Shellの最新リリースタグを検出
-# 2. 現在のDockerイメージのバージョンと比較
-# 3. 更新が必要な場合は自動的にPRを作成
+# This workflow does the following:
+# 1. Detect the latest MySQL Shell release tags
+# 2. Compare with current Docker image versions
+# 3. Automatically create a PR if updates are needed
 
 on:
   schedule:
-    # 毎日 UTC 3時17分に実行 (ランダムな時刻で負荷分散)
+    # Run at 3:17 UTC daily (random time to distribute load)
     - cron: '17 3 * * *'
-  workflow_dispatch: # 手動実行も可能にする
+  workflow_dispatch: # Enable manual execution
     inputs:
       dry_run:
-        description: '実際のPRを作成せずにテスト実行'
+        description: 'Test run without creating actual PR'
         required: false
         default: false
         type: boolean
       innovation_version:
-        description: 'テスト用の強制Innovation版バージョン（例：9.3.0）'
+        description: 'Force Innovation version for testing (e.g.: 9.3.0)'
         required: false
         type: string
       lts_version:
-        description: 'テスト用の強制LTS版バージョン（例：8.4.5）'
+        description: 'Force LTS version for testing (e.g.: 8.4.5)'
         required: false
         type: string
 
@@ -30,22 +30,22 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-      actions: write  # ワークフローファイルを変更するための正しい権限
+      actions: write  # Correct permission to modify workflow files
     runs-on: ubuntu-latest
-    # ジョブの概要説明
+    # Job description
     name: Check and update MySQL Shell versions
     steps:
-      # ステップ1: リポジトリの取得
+      # Step 1: Get the repository
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          # プルリクエスト作成のためにトークンが必要
+          # Token needed for PR creation
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Get current versions
         id: current_versions
         run: |
-          # Dockerfileから現在のバージョンを取得
+          # Get current versions from Dockerfiles
           if [[ ! -f docker/innovation/Dockerfile ]] || [[ ! -f docker/lts/Dockerfile ]]; then
             echo "::error::Required Dockerfiles not found!"
             exit 1
@@ -64,7 +64,7 @@ jobs:
           echo "Current Innovation: $CURRENT_INNOVATION"
           echo "Current LTS: $CURRENT_LTS"
           
-          # メジャーバージョンを抽出 (後で使用)
+          # Extract major versions (for later use)
           INNOVATION_MAJOR_VERSION=$(echo "$CURRENT_INNOVATION" | cut -d. -f1)
           LTS_MAJOR_VERSION=$(echo "$CURRENT_LTS" | cut -d. -f1)
           echo "INNOVATION_MAJOR_VERSION=${INNOVATION_MAJOR_VERSION}" >> $GITHUB_OUTPUT
@@ -73,16 +73,16 @@ jobs:
       - name: Get latest MySQL Shell tags
         id: latest_tags
         run: |
-          # GitHub APIからタグ情報を取得
+          # Get tag information from GitHub API
           INNOVATION_MAJOR="${{ steps.current_versions.outputs.INNOVATION_MAJOR_VERSION }}"
           LTS_MAJOR="${{ steps.current_versions.outputs.LTS_MAJOR_VERSION }}"
           
-          # テスト用の手動指定バージョンがあれば使用する
+          # Use manually specified version for testing if provided
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ github.event.inputs.innovation_version }}" ]]; then
             LATEST_INNOVATION="${{ github.event.inputs.innovation_version }}"
             echo "Using manually specified Innovation version: $LATEST_INNOVATION"
           else
-            # GitHub APIからのフェッチを試みる
+            # Try to fetch from GitHub API
             API_RESPONSE=$(curl -s -H "Accept: application/vnd.github+json" \
                            -H "X-GitHub-Api-Version: 2022-11-28" \
                            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
@@ -93,26 +93,26 @@ jobs:
               exit 1
             fi
             
-            # 正規表現パターンを動的に構築
+            # Dynamically build regex pattern
             INNOVATION_PATTERN="^${INNOVATION_MAJOR}\\.\\d+\\.\\d+$"
             
             LATEST_INNOVATION=$(echo "$API_RESPONSE" | jq -r --arg pattern "$INNOVATION_PATTERN" '[.[] | select(.name | test($pattern))][0].name')
           fi
 
-          # LTSバージョンの取得（手動指定またはAPI）
+          # Get LTS version (manual or API)
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ github.event.inputs.lts_version }}" ]]; then
             LATEST_LTS="${{ github.event.inputs.lts_version }}"
             echo "Using manually specified LTS version: $LATEST_LTS"
           else
-            # APIレスポンスを再利用
+            # Reuse API response
             LTS_PATTERN="^${LTS_MAJOR}\\.\\d+\\.\\d+$"
             LATEST_LTS=$(echo "$API_RESPONSE" | jq -r --arg pattern "$LTS_PATTERN" '[.[] | select(.name | test($pattern))][0].name')
           fi
           
-          # 結果の検証
+          # Validate results
           if [[ -z "$LATEST_INNOVATION" ]] || [[ "$LATEST_INNOVATION" == "null" ]] || [[ -z "$LATEST_LTS" ]] || [[ "$LATEST_LTS" == "null" ]]; then
             echo "::warning::Failed to find matching versions. Using hardcoded patterns as fallback."
-            # フォールバック: ハードコードされたバージョンパターン
+            # Fallback: hardcoded version patterns
             LATEST_INNOVATION=${LATEST_INNOVATION:-$(echo "$API_RESPONSE" | jq -r '[.[] | select(.name | test("^9\\.\\d+\\.\\d+$"))][0].name')}
             LATEST_LTS=${LATEST_LTS:-$(echo "$API_RESPONSE" | jq -r '[.[] | select(.name | test("^8\\.\\d+\\.\\d+$"))][0].name')}
           fi
@@ -125,9 +125,9 @@ jobs:
       - name: Check versions
         id: check_versions
         run: |
-          # バージョン比較ユーティリティ関数
+          # Version comparison utility function
           version_gt() {
-            # $1 > $2 の場合に0を返す
+            # Returns 0 if $1 > $2
             test "$(echo "$1 $2" | tr " " "\n" | sort -V | head -n 1)" != "$1"
           }
           
@@ -139,7 +139,7 @@ jobs:
           INNOVATION_UPDATE_NEEDED="false"
           LTS_UPDATE_NEEDED="false"
           
-          # Innovation バージョンのチェック
+          # Check Innovation version
           if [[ -z "$LATEST_INNOVATION" ]] || [[ "$LATEST_INNOVATION" == "null" ]]; then
             echo "::warning::No valid Innovation version found in API response"
           elif [[ "$CURRENT_INNOVATION" != "$LATEST_INNOVATION" ]]; then
@@ -153,7 +153,7 @@ jobs:
             echo "Innovation is up-to-date at version $CURRENT_INNOVATION."
           fi
           
-          # LTS バージョンのチェック
+          # Check LTS version
           if [[ -z "$LATEST_LTS" ]] || [[ "$LATEST_LTS" == "null" ]]; then
             echo "::warning::No valid LTS version found in API response"
           elif [[ "$CURRENT_LTS" != "$LATEST_LTS" ]]; then
@@ -167,14 +167,14 @@ jobs:
             echo "LTS is up-to-date at version $CURRENT_LTS."
           fi
           
-          # テストモードでは常に更新が必要であると報告
+          # In test mode, always report updates are needed
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.dry_run }}" == "true" ]]; then
             if [[ -n "${{ github.event.inputs.innovation_version }}" ]]; then
-              echo "::notice::テストモード: Innovation更新をテスト実行します"
+              echo "::notice::Test mode: Running Innovation update test"
               INNOVATION_UPDATE_NEEDED="true"
             fi
             if [[ -n "${{ github.event.inputs.lts_version }}" ]]; then
-              echo "::notice::テストモード: LTS更新をテスト実行します"
+              echo "::notice::Test mode: Running LTS update test"
               LTS_UPDATE_NEEDED="true"
             fi
           fi
@@ -183,6 +183,7 @@ jobs:
           echo "LTS_UPDATE_NEEDED=${LTS_UPDATE_NEEDED}" >> $GITHUB_OUTPUT
 
       - name: Update files and create PR if needed
+        id: update_pr
         if: steps.check_versions.outputs.INNOVATION_UPDATE_NEEDED == 'true' || steps.check_versions.outputs.LTS_UPDATE_NEEDED == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -191,221 +192,92 @@ jobs:
           CURRENT_LTS: ${{ steps.current_versions.outputs.CURRENT_LTS }}
           LATEST_LTS: ${{ steps.latest_tags.outputs.LATEST_LTS }}
           DRY_RUN: ${{ github.event.inputs.dry_run == 'true' }}
+          INNOVATION_UPDATE_NEEDED: ${{ steps.check_versions.outputs.INNOVATION_UPDATE_NEEDED }}
+          LTS_UPDATE_NEEDED: ${{ steps.check_versions.outputs.LTS_UPDATE_NEEDED }}
         run: |
-          # dry runモードを確認
-          if [[ "$DRY_RUN" == "true" ]]; then
-            echo "::notice::dry runモードで実行しています。実際の変更は行いません。"
-          fi
-          
-          # ブランチ作成
+          # Generate branch name at runtime with timestamp
           BRANCH_NAME="bot/update-mysql-shell-$(date +%Y%m%d%H%M%S)"
-          if [[ "$DRY_RUN" != "true" ]]; then
-            git config --global user.name 'github-actions[bot]'
-            git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-            git checkout -b $BRANCH_NAME
+          echo "Using branch name: $BRANCH_NAME"
+          
+          # Set as output for reuse in subsequent steps
+          echo "BRANCH_NAME=${BRANCH_NAME}" >> $GITHUB_OUTPUT
+          
+          # Verify that update script exists before execution
+          if [ ! -f .github/check-new-release/scripts/update.sh ]; then
+            echo "::error::Script .github/check-new-release/scripts/update.sh not found"
+            exit 1
+          fi
+          
+          # Check if the script has execution permissions and capture exit status immediately
+          if [ -x .github/check-new-release/scripts/update.sh ]; then
+            # If executable, run directly
+            echo "Running update.sh with execution permissions"
+            .github/check-new-release/scripts/update.sh
+            # Immediately capture exit status to avoid overwrites
+            UPDATE_STATUS=$?
           else
-            echo "dry run: git checkout -b $BRANCH_NAME"
+            # If not executable, explicitly use bash
+            echo "Running update.sh via bash (no execution permissions)"
+            bash .github/check-new-release/scripts/update.sh
+            # Immediately capture exit status to avoid overwrites
+            UPDATE_STATUS=$?
           fi
           
-          # PRの本文を初期化（適切に改行を処理するためヒアドキュメントを使用）
-          PR_BODY=$(cat << 'EOL'
-Automated update for MySQL Shell versions.
-
-## Changes:
-EOL
-)
-          
-          # バージョン更新関数
-          update_version() {
-            local type=$1
-            local current_version=$2
-            local new_version=$3
-            local major_version=$(echo "$new_version" | cut -d. -f1)
-            local minor_version=$(echo "$new_version" | cut -d. -f2)
-            local short_version="${major_version}.${minor_version}"
-            
-            echo "Updating $type to $new_version (major.minor: $short_version)..."
-            
-            # Dockerfile の更新
-            if [[ "$DRY_RUN" != "true" ]]; then
-              sed -i "s/^ARG MYSQL_SHELL_VERSION=.*/ARG MYSQL_SHELL_VERSION=$new_version/" docker/$type/Dockerfile || {
-                echo "::warning::Failed to update version in docker/$type/Dockerfile, but continuing..."
-              }
-            else
-              echo "dry run: docker/$type/Dockerfile 内の ARG MYSQL_SHELL_VERSION=$current_version を $new_version に更新"
-            fi
-            
-            # README.md の更新
-            if [[ "$type" == "innovation" ]]; then
-              local match_pattern="Innovation Series ([0-9]\\.[0-9]\\.[x0-9])"
-              local replace_value="Innovation Series (${major_version}.${minor_version}.x)"
-              local tag_pattern="snickerjp\/docker-mysql-shell:${major_version}\\.[0-9]"
-              local tag_replace="snickerjp\/docker-mysql-shell:${short_version}"
-              
-              if [[ "$DRY_RUN" != "true" ]]; then
-                # 各sedコマンドを個別にエラーハンドリング
-                sed -i "s/$match_pattern/$replace_value/g" README.md || {
-                  echo "::warning::Failed to update Innovation Series version in README.md, but continuing..."
-                }
-                
-                sed -i "s/$tag_pattern/$tag_replace/g" README.md || {
-                  echo "::warning::Failed to update Innovation image tag in README.md, but continuing..."
-                }
-              else
-                echo "dry run: README.md 内の '$match_pattern' を '$replace_value' に更新"
-                echo "dry run: README.md 内の '$tag_pattern' を '$tag_replace' に更新"
-              fi
-            else
-              local match_pattern="LTS Series ([0-9]\\.[0-9]\\.[x0-9])"
-              local replace_value="LTS Series (${major_version}.${minor_version}.x)"
-              local tag_pattern="snickerjp\/docker-mysql-shell:${major_version}\\.[0-9]"
-              local tag_replace="snickerjp\/docker-mysql-shell:${short_version}"
-              
-              if [[ "$DRY_RUN" != "true" ]]; then
-                sed -i "s/$match_pattern/$replace_value/g" README.md || {
-                  echo "::warning::Failed to update LTS Series version in README.md, but continuing..."
-                }
-                
-                sed -i "s/$tag_pattern/$tag_replace/g" README.md || {
-                  echo "::warning::Failed to update LTS image tag in README.md, but continuing..."
-                }
-              else
-                echo "dry run: README.md 内の '$match_pattern' を '$replace_value' に更新"
-                echo "dry run: README.md 内の '$tag_pattern' を '$tag_replace' に更新"
-              fi
-            fi
-            
-            # ワークフローファイルの更新部分を削除
-            # この部分を削除または以下のようにコメントアウト
-            echo "::notice::ワークフローファイルは手動更新が必要です: .github/workflows/docker-*.yml 内の version: ${major_version}.[x] を version: ${short_version} に更新してください"
-            
-            # PR本文に変更内容を追加（整形された形式で）
-            PR_BODY+=$(cat << EOL
-
-### ${type^} バージョン更新
-* **${current_version}** → **${new_version}**
-* ℹ️ ワークフローファイル(.github/workflows/docker-*.yml)は手動で更新する必要があります
-EOL
-)
-            
-            # 更新が成功したか確認
-            if [[ "$DRY_RUN" != "true" ]]; then
-              if ! grep -q "ARG MYSQL_SHELL_VERSION=$new_version" docker/$type/Dockerfile; then
-                echo "::warning::Version update in docker/$type/Dockerfile might have failed, but we'll continue..."
-              fi
-            fi
-          }
-          
-          # Innovation の更新
-          if [[ "${{ steps.check_versions.outputs.INNOVATION_UPDATE_NEEDED }}" == "true" ]]; then
-            update_version "innovation" "$CURRENT_INNOVATION" "$LATEST_INNOVATION"
-          fi
-          
-          # LTS の更新
-          if [[ "${{ steps.check_versions.outputs.LTS_UPDATE_NEEDED }}" == "true" ]]; then
-            update_version "lts" "$CURRENT_LTS" "$LATEST_LTS"
-          fi
-          
-          # PR本文に必要な手順を追加
-          PR_BODY+=$(cat << 'EOL'
-
-## ⚠️ 必要な手動アクション
-1. このPRをマージする前に、ワークフローファイル(.github/workflows/docker-*.yml)を手動で更新してください
-2. メジャー・マイナーバージョン番号の記述を正確に更新してください
-EOL
-)
-          
-          # 変更をコミットしてプッシュ
-          changed_files=$(git status --porcelain | awk '{print $2}')
-          if [[ -z "$changed_files" ]]; then
-            echo "No changes to commit."
-            exit 0
-          fi
-          
-          # ファイルの変更をチェック
-          echo "Changed files:"
-          for file in $changed_files; do
-            echo "- $file"
-          done
-          
-          # すべての変更をステージング
-          if [[ "$DRY_RUN" != "true" ]]; then
-            git add $changed_files
-            git commit -m "Update MySQL Shell versions (Innovation: $LATEST_INNOVATION, LTS: $LATEST_LTS)"
-            
-            # エラーハンドリング付きでプッシュ
-            if ! git push origin $BRANCH_NAME; then
-              echo "::error::Failed to push changes to GitHub"
-              exit 1
-            fi
-            
-            # プルリクエストを作成
-            if ! gh pr create \
-              --base develop \
-              --head $BRANCH_NAME \
-              --title "Update MySQL Shell versions (Innovation: $LATEST_INNOVATION, LTS: $LATEST_LTS)" \
-              --body "$PR_BODY"; then
-              echo "::error::Failed to create Pull Request"
-              exit 1
-            fi
-            
-            echo "Pull request created successfully!"
-          else
-            echo "dry run: 以下のファイルが変更されます:"
-            for file in $changed_files; do
-              echo "- $file"
-            done
-            echo "dry run: コミットメッセージ: Update MySQL Shell versions (Innovation: $LATEST_INNOVATION, LTS: $LATEST_LTS)"
-            echo "dry run: PR作成: タイトル: Update MySQL Shell versions (Innovation: $LATEST_INNOVATION, LTS: $LATEST_LTS)"
-            echo "dry run: PR本文:"
-            echo -e "$PR_BODY"
-            echo "dry run終了: 実際の変更は行われていません。"
+          # Check exit status
+          if [ $UPDATE_STATUS -ne 0 ]; then
+            echo "::error::Script update.sh exited with status $UPDATE_STATUS"
+            exit $UPDATE_STATUS
           fi
 
-      # PR作成後に追加のメッセージを表示
+      # Show additional messages after PR creation
       - name: Show post-PR creation message
         if: steps.check_versions.outputs.INNOVATION_UPDATE_NEEDED == 'true' || steps.check_versions.outputs.LTS_UPDATE_NEEDED == 'true'
+        env:
+          DRY_RUN: ${{ github.event.inputs.dry_run == 'true' }}
+          INNOVATION_UPDATE_NEEDED: ${{ steps.check_versions.outputs.INNOVATION_UPDATE_NEEDED }}
+          LTS_UPDATE_NEEDED: ${{ steps.check_versions.outputs.LTS_UPDATE_NEEDED }}
+          LATEST_INNOVATION: ${{ steps.latest_tags.outputs.LATEST_INNOVATION }}
+          LATEST_LTS: ${{ steps.latest_tags.outputs.LATEST_LTS }}
+          BRANCH_NAME: ${{ steps.update_pr.outputs.BRANCH_NAME }}
         run: |
-          # DRY_RUNがtrueでない場合のみ実行
-          if [[ "$DRY_RUN" != "true" ]]; then
-            echo "::group::ワークフローファイル更新手順"
-            echo "PR #xxx が作成されました。次に手動でワークフローファイルを更新してください。"
-            echo "1. PRブランチをローカルにチェックアウト:"
-            echo "   git fetch origin $BRANCH_NAME && git checkout $BRANCH_NAME"
-            echo ""
-            echo "2. 以下のコマンドでワークフローファイルを更新:"
-            
-            # Innovation更新の場合
-            if [[ "${{ steps.check_versions.outputs.INNOVATION_UPDATE_NEEDED }}" == "true" ]]; then
-              INNOVATION_MAJOR=$(echo "$LATEST_INNOVATION" | cut -d. -f1)
-              INNOVATION_MINOR=$(echo "$LATEST_INNOVATION" | cut -d. -f2)
-              INNOVATION_SHORT="${INNOVATION_MAJOR}.${INNOVATION_MINOR}"
-              echo "   # Innovation更新コマンド:"
-              echo "   find .github/workflows -name \"docker-*.yml\" -exec sed -i 's/version: ${INNOVATION_MAJOR}\.x/version: ${INNOVATION_SHORT}/g' {} \\;"
-            fi
-            
-            # LTS更新の場合
-            if [[ "${{ steps.check_versions.outputs.LTS_UPDATE_NEEDED }}" == "true" ]]; then
-              LTS_MAJOR=$(echo "$LATEST_LTS" | cut -d. -f1)
-              LTS_MINOR=$(echo "$LATEST_LTS" | cut -d. -f2)
-              LTS_SHORT="${LTS_MAJOR}.${LTS_MINOR}"
-              echo "   # LTS更新コマンド:"
-              echo "   find .github/workflows -name \"docker-*.yml\" -exec sed -i 's/version: ${LTS_MAJOR}\.x/version: ${LTS_SHORT}/g' {} \\;"
-            fi
-            
-            echo ""
-            echo "3. 変更をコミット:"
-            echo "   git add .github/workflows/"
-            echo "   git commit -m \"Update workflow files for MySQL Shell versions\""
-            echo ""
-            echo "4. 変更をプッシュ:"
-            echo "   git push origin $BRANCH_NAME"
-            echo ""
-            echo "これで既存のPRにワークフロー更新が追加されます。"
-            echo "::endgroup::"
+          # Verify branch name is available from previous step
+          if [ -z "$BRANCH_NAME" ]; then
+            echo "::warning::Branch name not available from previous step"
+            echo "Generating new branch name as fallback"
+            BRANCH_NAME="bot/update-mysql-shell-$(date +%Y%m%d%H%M%S)"
+            echo "Generated fallback branch name: $BRANCH_NAME"
+          else
+            echo "Using branch name from previous step: $BRANCH_NAME"
+          fi
+          
+          # Verify that post-message script exists before execution
+          if [ ! -f .github/check-new-release/scripts/post-message.sh ]; then
+            echo "::error::Script post-message.sh not found"
+            exit 1
+          fi
+          
+          # Check if the script has execution permissions and capture exit status immediately
+          if [ -x .github/check-new-release/scripts/post-message.sh ]; then
+            # If executable, run directly
+            echo "Running post-message.sh with execution permissions"
+            .github/check-new-release/scripts/post-message.sh
+            # Immediately capture exit status to avoid overwrites
+            POST_MESSAGE_STATUS=$?
+          else
+            # If not executable, explicitly use bash
+            echo "Running post-message.sh via bash (no execution permissions)"
+            bash .github/check-new-release/scripts/post-message.sh
+            # Immediately capture exit status to avoid overwrites
+            POST_MESSAGE_STATUS=$?
+          fi
+          
+          # Check exit status
+          if [ $POST_MESSAGE_STATUS -ne 0 ]; then
+            echo "::error::Script post-message.sh exited with status $POST_MESSAGE_STATUS"
+            exit $POST_MESSAGE_STATUS
           fi
 
-      # ステップ6: 更新不要の場合の通知
+      # Step 6: Notification when no update is needed
       - name: No update needed
         if: steps.check_versions.outputs.INNOVATION_UPDATE_NEEDED == 'false' && steps.check_versions.outputs.LTS_UPDATE_NEEDED == 'false'
         run: |
