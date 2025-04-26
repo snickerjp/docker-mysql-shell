@@ -28,7 +28,7 @@ on:
 jobs:
   check-release:
     permissions:
-      contents: read
+      contents: write
       pull-requests: write
     runs-on: ubuntu-latest
     # ジョブの概要説明
