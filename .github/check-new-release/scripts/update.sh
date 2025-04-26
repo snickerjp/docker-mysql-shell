@@ -121,8 +121,11 @@ update_version() {
   if [[ -n "$workflow_files" ]]; then
     echo "Checking workflow files for necessary updates (will not modify them)..."
     
-    local version_pattern="version: ${major_version}\\.x"
-    local version_replace="version: ${short_version}"
+    # Create patterns to match both formats: version: X.Y and version: X.x
+    local version_pattern1="version: ${major_version}\\.x"
+    local version_replace1="version: ${short_version}"
+    local version_pattern2="version: ${major_version}\\.[0-9]"
+    local version_replace2="version: ${short_version}"
     
     # Create a section in PR body for workflow file updates
     WORKFLOW_INSTRUCTIONS=""
@@ -130,12 +133,13 @@ update_version() {
     
     # Check each workflow file
     for workflow_file in $workflow_files; do
-      if grep -q "$version_pattern" "$workflow_file"; then
+      # Check for version: X.x pattern
+      if grep -q "$version_pattern1" "$workflow_file"; then
         any_needs_update=true
-        echo "Found workflow file needing update: $workflow_file"
+        echo "Found workflow file needing update (pattern 1): $workflow_file"
         
         # Get the line number and context for the PR description
-        local line_info=$(grep -n "$version_pattern" "$workflow_file")
+        local line_info=$(grep -n "$version_pattern1" "$workflow_file")
         local line_num=$(echo "$line_info" | cut -d':' -f1)
         local line_content=$(echo "$line_info" | cut -d':' -f2-)
         
@@ -143,7 +147,28 @@ update_version() {
         WORKFLOW_INSTRUCTIONS="${WORKFLOW_INSTRUCTIONS}
 - **$workflow_file** (line $line_num):
   - From: \`$line_content\`
-  - To: \`$(echo "$line_content" | sed "s/$version_pattern/$version_replace/")\`"
+  - To: \`$(echo "$line_content" | sed "s/$version_pattern1/$version_replace1/")\`"
+      # Check for version: X.Y pattern
+      elif grep -q "$version_pattern2" "$workflow_file"; then
+        # Only consider it an update if the minor version actually changed
+        local current_pattern="version: ${major_version}\\.${minor_version_old}"
+        if grep -q "$current_pattern" "$workflow_file"; then
+          any_needs_update=true
+          echo "Found workflow file needing update (pattern 2): $workflow_file"
+          
+          # Get the line number and context for the PR description
+          local line_info=$(grep -n "$current_pattern" "$workflow_file")
+          local line_num=$(echo "$line_info" | cut -d':' -f1)
+          local line_content=$(echo "$line_info" | cut -d':' -f2-)
+          
+          # Add to workflow update instructions
+          WORKFLOW_INSTRUCTIONS="${WORKFLOW_INSTRUCTIONS}
+- **$workflow_file** (line $line_num):
+  - From: \`$line_content\`
+  - To: \`$(echo "$line_content" | sed "s/$current_pattern/version: ${short_version}/")\`"
+        else
+          echo "::info::Version pattern found but no update needed (current version): $workflow_file"
+        fi
       else
         echo "::info::No matching pattern found, no update needed: $workflow_file"
       fi
