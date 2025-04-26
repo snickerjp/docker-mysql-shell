@@ -208,9 +208,23 @@ jobs:
             exit 1
           fi
           
-          # Execute external script (without execution permission, using bash command)
-          # and check its exit status
-          bash .github/check-new-release/scripts/update.sh
+          # Check if the script has execution permissions
+          if [ -x .github/check-new-release/scripts/update.sh ]; then
+            # If executable, run directly
+            echo "Running update.sh with execution permissions"
+            .github/check-new-release/scripts/update.sh
+          else
+            # If not executable, explicitly use bash
+            echo "Running update.sh via bash (no execution permissions)"
+            bash .github/check-new-release/scripts/update.sh
+          fi
+          
+          # Capture exit status
+          UPDATE_STATUS=$?
+          if [ $UPDATE_STATUS -ne 0 ]; then
+            echo "::error::Script update.sh exited with status $UPDATE_STATUS"
+            exit $UPDATE_STATUS
+          fi
           
           # Capture exit status
           UPDATE_STATUS=$?
@@ -246,8 +260,23 @@ jobs:
             exit 1
           fi
           
-          # Execute external script and check its exit status
-          bash .github/check-new-release/scripts/post-message.sh
+          # Check if the script has execution permissions
+          if [ -x .github/check-new-release/scripts/post-message.sh ]; then
+            # If executable, run directly
+            echo "Running post-message.sh with execution permissions"
+            .github/check-new-release/scripts/post-message.sh
+          else
+            # If not executable, explicitly use bash
+            echo "Running post-message.sh via bash (no execution permissions)"
+            bash .github/check-new-release/scripts/post-message.sh
+          fi
+          
+          # Capture exit status
+          POST_MESSAGE_STATUS=$?
+          if [ $POST_MESSAGE_STATUS -ne 0 ]; then
+            echo "::error::Script post-message.sh exited with status $POST_MESSAGE_STATUS"
+            exit $POST_MESSAGE_STATUS
+          fi
           
           # Capture exit status
           POST_MSG_STATUS=$?
