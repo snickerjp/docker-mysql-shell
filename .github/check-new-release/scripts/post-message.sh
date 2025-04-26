@@ -4,8 +4,15 @@ set -eu
 
 # DRY_RUNがtrueでない場合のみ実行
 if [[ "$DRY_RUN" != "true" ]]; then
-  echo "::group::ワークフローファイル更新手順"
-  echo "PR #xxx が作成されました。次に手動でワークフローファイルを更新してください。"
+  echo "::group::PR作成完了"
+  echo "✅ MySQLシェルバージョン更新のPRが作成されました。"
+  echo ""
+  echo "ワークフローファイルは自動的に更新されましたが、念のため確認してください。"
+  echo "万一、自動更新が失敗した場合は、以下の手順で手動更新が可能です："
+  echo ""
+  echo "::endgroup::"
+  
+  echo "::group::ワークフローファイル更新手順（バックアップ）"
   echo "1. PRブランチをローカルにチェックアウト:"
   echo "   git fetch origin $BRANCH_NAME && git checkout $BRANCH_NAME"
   echo ""

@@ -34,10 +34,21 @@ update_version() {
   
   # Dockerfile の更新
   if [[ "$DRY_RUN" != "true" ]]; then
-    sed -i "s/^ARG MYSQL_SHELL_VERSION=.*/ARG MYSQL_SHELL_VERSION=$new_version/" docker/$type/Dockerfile || {
-      echo "::warning::Failed to update version in docker/$type/Dockerfile, but continuing..."
-    }
+    if ! sed -i "s/^ARG MYSQL_SHELL_VERSION=.*/ARG MYSQL_SHELL_VERSION=$new_version/" docker/$type/Dockerfile; then
+      echo "::error::Failed to update version in docker/$type/Dockerfile"
+      echo "このエラーは重要なファイル更新に失敗したため、処理を中断します。"
+      exit 1
+    fi
+    
+    # 更新が成功したか検証
+    if ! grep -q "ARG MYSQL_SHELL_VERSION=$new_version" docker/$type/Dockerfile; then
+      echo "::error::Version update in docker/$type/Dockerfile could not be verified"
+      echo "Dockerfileの更新内容を確認できないため処理を中断します。"
+      exit 1
+    fi
   else
+    # dry runモードではより詳細な情報を表示
+    echo "dry run: 実行予定のコマンド: sed -i \"s/^ARG MYSQL_SHELL_VERSION=.*/ARG MYSQL_SHELL_VERSION=$new_version/\" docker/$type/Dockerfile"
     echo "dry run: docker/$type/Dockerfile 内の ARG MYSQL_SHELL_VERSION=$current_version を $new_version に更新"
   fi
   
@@ -49,15 +60,22 @@ update_version() {
     local tag_replace="snickerjp\/docker-mysql-shell:${short_version}"
     
     if [[ "$DRY_RUN" != "true" ]]; then
-      # 各sedコマンドを個別にエラーハンドリング
-      sed -i "s/$match_pattern/$replace_value/g" README.md || {
-        echo "::warning::Failed to update Innovation Series version in README.md, but continuing..."
-      }
+      # READMEの更新は重要だが失敗しても処理は継続する
+      sed -i "s/$match_pattern/$replace_value/g" README.md
+      if [ $? -ne 0 ]; then
+        echo "::warning::Failed to update Innovation Series version in README.md"
+        echo "README.mdの更新に失敗しましたが、処理は継続します。"
+      fi
       
-      sed -i "s/$tag_pattern/$tag_replace/g" README.md || {
-        echo "::warning::Failed to update Innovation image tag in README.md, but continuing..."
-      }
+      sed -i "s/$tag_pattern/$tag_replace/g" README.md
+      if [ $? -ne 0 ]; then
+        echo "::warning::Failed to update Innovation image tag in README.md"
+        echo "README.mdのタグ更新に失敗しましたが、処理は継続します。"
+      fi
     else
+      # dry runモードではより詳細な情報を表示
+      echo "dry run: 実行予定のコマンド: sed -i \"s/$match_pattern/$replace_value/g\" README.md"
+      echo "dry run: 実行予定のコマンド: sed -i \"s/$tag_pattern/$tag_replace/g\" README.md"
       echo "dry run: README.md 内の '$match_pattern' を '$replace_value' に更新"
       echo "dry run: README.md 内の '$tag_pattern' を '$tag_replace' に更新"
     fi
@@ -68,36 +86,72 @@ update_version() {
     local tag_replace="snickerjp\/docker-mysql-shell:${short_version}"
     
     if [[ "$DRY_RUN" != "true" ]]; then
-      sed -i "s/$match_pattern/$replace_value/g" README.md || {
-        echo "::warning::Failed to update LTS Series version in README.md, but continuing..."
-      }
+      sed -i "s/$match_pattern/$replace_value/g" README.md
+      if [ $? -ne 0 ]; then
+        echo "::warning::Failed to update LTS Series version in README.md"
+        echo "README.mdの更新に失敗しましたが、処理は継続します。"
+      fi
       
-      sed -i "s/$tag_pattern/$tag_replace/g" README.md || {
-        echo "::warning::Failed to update LTS image tag in README.md, but continuing..."
-      }
+      sed -i "s/$tag_pattern/$tag_replace/g" README.md
+      if [ $? -ne 0 ]; then
+        echo "::warning::Failed to update LTS image tag in README.md"
+        echo "README.mdのタグ更新に失敗しましたが、処理は継続します。"
+      fi
     else
+      # dry runモードではより詳細な情報を表示
+      echo "dry run: 実行予定のコマンド: sed -i \"s/$match_pattern/$replace_value/g\" README.md"
+      echo "dry run: 実行予定のコマンド: sed -i \"s/$tag_pattern/$tag_replace/g\" README.md"
       echo "dry run: README.md 内の '$match_pattern' を '$replace_value' に更新"
       echo "dry run: README.md 内の '$tag_pattern' を '$tag_replace' に更新"
     fi
   fi
   
-  # ワークフローファイルの更新部分を削除
-  # この部分を削除または以下のようにコメントアウト
-  echo "::notice::ワークフローファイルは手動更新が必要です: .github/workflows/docker-*.yml 内の version: ${major_version}.[x] を version: ${short_version} に更新してください"
+  # ワークフローファイルの自動更新
+  local workflow_files=$(find .github/workflows -name "docker-*.yml" 2>/dev/null || echo "")
+  if [[ -n "$workflow_files" ]]; then
+    echo "ワークフローファイルを自動的に更新します..."
+    
+    local version_pattern="version: ${major_version}\\.x"
+    local version_replace="version: ${short_version}"
+    
+    if [[ "$DRY_RUN" != "true" ]]; then
+      # 各ファイルに対して実行
+      for workflow_file in $workflow_files; do
+        if grep -q "$version_pattern" "$workflow_file"; then
+          echo "更新: $workflow_file"
+          sed -i "s/$version_pattern/$version_replace/g" "$workflow_file"
+          if [ $? -ne 0 ]; then
+            echo "::warning::Failed to update version in $workflow_file"
+            echo "ワークフローファイル $workflow_file の更新に失敗しましたが、処理は継続します。"
+          fi
+        else
+          echo "::info::該当するパターンがないため更新不要: $workflow_file"
+        fi
+      done
+    else
+      echo "dry run: 以下のファイルを更新予定:"
+      for workflow_file in $workflow_files; do
+        if grep -q "$version_pattern" "$workflow_file"; then
+          echo "dry run: $workflow_file 内の '$version_pattern' を '$version_replace' に更新"
+          echo "dry run: 実行予定のコマンド: sed -i \"s/$version_pattern/$version_replace/g\" \"$workflow_file\""
+        fi
+      done
+    fi
+    
+    # PR説明文にワークフローファイル更新の旨を追加
+    PR_BODY="${PR_BODY} (ワークフローファイルも自動的に更新されました)"
+  else
+    echo "::warning::ワークフローファイルが見つかりませんでした。"
+  fi
   
   # PR本文に変更内容を追加（整形された形式で）
   PR_BODY="${PR_BODY}
 
 ### ${type^} バージョン更新
-* **${current_version}** → **${new_version}**
-* ℹ️ ワークフローファイル(.github/workflows/docker-*.yml)は手動で更新する必要があります"
+* **${current_version}** → **${new_version}**"
   
-  # 更新が成功したか確認
-  if [[ "$DRY_RUN" != "true" ]]; then
-    if ! grep -q "ARG MYSQL_SHELL_VERSION=$new_version" docker/$type/Dockerfile; then
-      echo "::warning::Version update in docker/$type/Dockerfile might have failed, but we'll continue..."
-    fi
-  fi
+  # 成功ログ
+  echo "✅ $type のバージョン更新が完了しました"
 }
 
 # Innovation の更新
@@ -113,9 +167,14 @@ fi
 # PR本文に必要な手順を追加
 PR_BODY="${PR_BODY}
 
-## ⚠️ 必要な手動アクション
-1. このPRをマージする前に、ワークフローファイル(.github/workflows/docker-*.yml)を手動で更新してください
-2. メジャー・マイナーバージョン番号の記述を正確に更新してください"
+## 更新内容
+- Dockerfileのバージョン番号更新
+- README.mdのバージョン表記を更新
+- ワークフローファイルを自動的に更新
+
+## ⚠️ 注意事項
+1. ワークフローファイルの自動更新が行われていない場合は手動で更新してください
+2. マージ前に各ファイルの更新内容を確認してください"
 
 # 変更をコミットしてプッシュ
 changed_files=$(git status --porcelain | awk '{print $2}')
