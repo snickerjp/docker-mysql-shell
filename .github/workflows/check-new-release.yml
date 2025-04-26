@@ -183,6 +183,7 @@ jobs:
           echo "LTS_UPDATE_NEEDED=${LTS_UPDATE_NEEDED}" >> $GITHUB_OUTPUT
 
       - name: Update files and create PR if needed
+        id: update_pr
         if: steps.check_versions.outputs.INNOVATION_UPDATE_NEEDED == 'true' || steps.check_versions.outputs.LTS_UPDATE_NEEDED == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -197,10 +198,26 @@ jobs:
           # Generate branch name at runtime with timestamp
           BRANCH_NAME="bot/update-mysql-shell-$(date +%Y%m%d%H%M%S)"
           echo "Using branch name: $BRANCH_NAME"
-          export BRANCH_NAME
+          
+          # Set as output for reuse in subsequent steps
+          echo "BRANCH_NAME=${BRANCH_NAME}" >> $GITHUB_OUTPUT
+          
+          # Verify that update script exists before execution
+          if [ ! -f .github/check-new-release/scripts/update.sh ]; then
+            echo "::error::Script .github/check-new-release/scripts/update.sh not found"
+            exit 1
+          fi
           
           # Execute external script (without execution permission, using bash command)
+          # and check its exit status
           bash .github/check-new-release/scripts/update.sh
+          
+          # Capture exit status
+          UPDATE_STATUS=$?
+          if [ $UPDATE_STATUS -ne 0 ]; then
+            echo "::error::Script update.sh exited with status $UPDATE_STATUS"
+            exit $UPDATE_STATUS
+          fi
 
       # Show additional messages after PR creation
       - name: Show post-PR creation message
@@ -211,17 +228,33 @@ jobs:
           LTS_UPDATE_NEEDED: ${{ steps.check_versions.outputs.LTS_UPDATE_NEEDED }}
           LATEST_INNOVATION: ${{ steps.latest_tags.outputs.LATEST_INNOVATION }}
           LATEST_LTS: ${{ steps.latest_tags.outputs.LATEST_LTS }}
+          BRANCH_NAME: ${{ steps.update_pr.outputs.BRANCH_NAME }}
         run: |
-          # Use the same branch name from the previous step (if available) or regenerate it
+          # Verify branch name is available from previous step
           if [ -z "$BRANCH_NAME" ]; then
+            echo "::warning::Branch name not available from previous step"
+            echo "Generating new branch name as fallback"
             BRANCH_NAME="bot/update-mysql-shell-$(date +%Y%m%d%H%M%S)"
-            echo "Regenerated branch name: $BRANCH_NAME"
+            echo "Generated fallback branch name: $BRANCH_NAME"
           else
-            echo "Using existing branch name: $BRANCH_NAME"
+            echo "Using branch name from previous step: $BRANCH_NAME"
           fi
           
-          # Execute external script (without execution permission, using bash command)
+          # Verify that post-message script exists before execution
+          if [ ! -f .github/check-new-release/scripts/post-message.sh ]; then
+            echo "::error::Script post-message.sh not found"
+            exit 1
+          fi
+          
+          # Execute external script and check its exit status
           bash .github/check-new-release/scripts/post-message.sh
+          
+          # Capture exit status
+          POST_MSG_STATUS=$?
+          if [ $POST_MSG_STATUS -ne 0 ]; then
+            echo "::error::Script post-message.sh exited with status $POST_MSG_STATUS"
+            exit $POST_MSG_STATUS
+          fi
 
       # Step 6: Notification when no update is needed
       - name: No update needed
