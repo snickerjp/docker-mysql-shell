@@ -24,7 +24,7 @@ jobs:
       matrix:
         include:
           - series: innovation
-            version: 9.2
+            version: 9.3
             extra_tag: Innovation
           - series: lts
             version: 8.4
