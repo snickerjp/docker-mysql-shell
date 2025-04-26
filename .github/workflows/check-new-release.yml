@@ -30,6 +30,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      workflows: write  # ワークフローファイルを変更するための権限を追加
     runs-on: ubuntu-latest
     # ジョブの概要説明
     name: Check and update MySQL Shell versions
