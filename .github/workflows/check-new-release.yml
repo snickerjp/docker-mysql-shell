@@ -191,11 +191,15 @@ jobs:
           CURRENT_LTS: ${{ steps.current_versions.outputs.CURRENT_LTS }}
           LATEST_LTS: ${{ steps.latest_tags.outputs.LATEST_LTS }}
           DRY_RUN: ${{ github.event.inputs.dry_run == 'true' }}
-          BRANCH_NAME: "bot/update-mysql-shell-$(date +%Y%m%d%H%M%S)"
           INNOVATION_UPDATE_NEEDED: ${{ steps.check_versions.outputs.INNOVATION_UPDATE_NEEDED }}
           LTS_UPDATE_NEEDED: ${{ steps.check_versions.outputs.LTS_UPDATE_NEEDED }}
         run: |
-          # 外部スクリプトを実行(実行権限なしでbashコマンドで実行)
+          # Generate branch name at runtime with timestamp
+          BRANCH_NAME="bot/update-mysql-shell-$(date +%Y%m%d%H%M%S)"
+          echo "Using branch name: $BRANCH_NAME"
+          export BRANCH_NAME
+          
+          # Execute external script (without execution permission, using bash command)
           bash .github/check-new-release/scripts/update.sh
 
       # PR作成後に追加のメッセージを表示
@@ -203,13 +207,20 @@ jobs:
         if: steps.check_versions.outputs.INNOVATION_UPDATE_NEEDED == 'true' || steps.check_versions.outputs.LTS_UPDATE_NEEDED == 'true'
         env:
           DRY_RUN: ${{ github.event.inputs.dry_run == 'true' }}
-          BRANCH_NAME: "bot/update-mysql-shell-$(date +%Y%m%d%H%M%S)"
           INNOVATION_UPDATE_NEEDED: ${{ steps.check_versions.outputs.INNOVATION_UPDATE_NEEDED }}
           LTS_UPDATE_NEEDED: ${{ steps.check_versions.outputs.LTS_UPDATE_NEEDED }}
           LATEST_INNOVATION: ${{ steps.latest_tags.outputs.LATEST_INNOVATION }}
           LATEST_LTS: ${{ steps.latest_tags.outputs.LATEST_LTS }}
         run: |
-          # 外部スクリプトを実行(実行権限なしでbashコマンドで実行)
+          # Use the same branch name from the previous step (if available) or regenerate it
+          if [ -z "$BRANCH_NAME" ]; then
+            BRANCH_NAME="bot/update-mysql-shell-$(date +%Y%m%d%H%M%S)"
+            echo "Regenerated branch name: $BRANCH_NAME"
+          else
+            echo "Using existing branch name: $BRANCH_NAME"
+          fi
+          
+          # Execute external script (without execution permission, using bash command)
           bash .github/check-new-release/scripts/post-message.sh
 
       # ステップ6: 更新不要の場合の通知
