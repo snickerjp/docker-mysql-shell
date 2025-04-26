@@ -1,11 +1,5 @@
 name: Check for new MySQL Shell releases
 
-
-# このワークフローは以下を行います：
-# 1. MySQL Shellの最新リリースタグを検出
-# 2. 現在のDockerイメージのバージョンと比較
-# 3. 更新が必要な場合は自動的にPRを作成
-
 # このワークフローは以下を行います：
 # 1. MySQL Shellの最新リリースタグを検出
 # 2. 現在のDockerイメージのバージョンと比較
@@ -16,20 +10,6 @@ on:
     # 毎日 UTC 3時17分に実行 (ランダムな時刻で負荷分散)
     - cron: '17 3 * * *'
   workflow_dispatch: # 手動実行も可能にする
-    inputs:
-      dry_run:
-        description: '実際のPRを作成せずにテスト実行'
-        required: false
-        default: false
-        type: boolean
-      innovation_version:
-        description: 'テスト用の強制Innovation版バージョン（例：9.3.0）'
-        required: false
-        type: string
-      lts_version:
-        description: 'テスト用の強制LTS版バージョン（例：8.4.5）'
-        required: false
-        type: string
     inputs:
       dry_run:
         description: '実際のPRを作成せずにテスト実行'
