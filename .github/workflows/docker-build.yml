@@ -48,7 +48,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build and push
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: ./docker/${{ matrix.series }}
           push: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
@@ -56,3 +56,11 @@ jobs:
             snickerjp/docker-mysql-shell:${{ matrix.version }}
             snickerjp/docker-mysql-shell:${{ matrix.extra_tag }}
             ${{ matrix.series == 'lts' && 'snickerjp/docker-mysql-shell:latest' || '' }}
+
+      - name: Update Docker Hub description
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          repository: snickerjp/docker-mysql-shell
+          readme-filepath: ./README.md
