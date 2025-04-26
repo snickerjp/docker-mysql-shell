@@ -207,7 +207,13 @@ jobs:
             echo "dry run: git checkout -b $BRANCH_NAME"
           fi
           
-          PR_BODY="Automated update for MySQL Shell versions.\n\n"
+          # PRの本文を初期化（適切に改行を処理するためヒアドキュメントを使用）
+          PR_BODY=$(cat << 'EOL'
+Automated update for MySQL Shell versions.
+
+## Changes:
+EOL
+)
           
           # バージョン更新関数
           update_version() {
@@ -273,9 +279,14 @@ jobs:
             # この部分を削除または以下のようにコメントアウト
             echo "::notice::ワークフローファイルは手動更新が必要です: .github/workflows/docker-*.yml 内の version: ${major_version}.[x] を version: ${short_version} に更新してください"
             
-            # PR本文に変更内容を追加
-            PR_BODY+="*   **${type^}:** ${current_version} -> ${new_version}\n"
-            PR_BODY+="*   注意: ワークフローファイル(.github/workflows/docker-*.yml)は手動で更新する必要があります\n"
+            # PR本文に変更内容を追加（整形された形式で）
+            PR_BODY+=$(cat << EOL
+
+### ${type^} バージョン更新
+* **${current_version}** → **${new_version}**
+* ℹ️ ワークフローファイル(.github/workflows/docker-*.yml)は手動で更新する必要があります
+EOL
+)
             
             # 更新が成功したか確認
             if [[ "$DRY_RUN" != "true" ]]; then
@@ -294,6 +305,15 @@ jobs:
           if [[ "${{ steps.check_versions.outputs.LTS_UPDATE_NEEDED }}" == "true" ]]; then
             update_version "lts" "$CURRENT_LTS" "$LATEST_LTS"
           fi
+          
+          # PR本文に必要な手順を追加
+          PR_BODY+=$(cat << 'EOL'
+
+## ⚠️ 必要な手動アクション
+1. このPRをマージする前に、ワークフローファイル(.github/workflows/docker-*.yml)を手動で更新してください
+2. メジャー・マイナーバージョン番号の記述を正確に更新してください
+EOL
+)
           
           # 変更をコミットしてプッシュ
           changed_files=$(git status --porcelain | awk '{print $2}')
