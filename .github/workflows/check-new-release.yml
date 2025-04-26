@@ -1,5 +1,6 @@
 name: Check for new MySQL Shell releases
 
+
 # このワークフローは以下を行います：
 # 1. MySQL Shellの最新リリースタグを検出
 # 2. 現在のDockerイメージのバージョンと比較
@@ -46,6 +47,9 @@ on:
 
 jobs:
   check-release:
+    permissions:
+      contents: read
+      pull-requests: write
     runs-on: ubuntu-latest
     # ジョブの概要説明
     name: Check and update MySQL Shell versions
