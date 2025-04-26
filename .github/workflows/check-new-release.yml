@@ -195,9 +195,24 @@ jobs:
           INNOVATION_UPDATE_NEEDED: ${{ steps.check_versions.outputs.INNOVATION_UPDATE_NEEDED }}
           LTS_UPDATE_NEEDED: ${{ steps.check_versions.outputs.LTS_UPDATE_NEEDED }}
         run: |
-          # Generate branch name at runtime with timestamp
-          BRANCH_NAME="bot/update-mysql-shell-$(date +%Y%m%d%H%M%S)"
+          # Generate branch name using version information instead of timestamp
+          if [[ "$INNOVATION_UPDATE_NEEDED" == "true" && "$LTS_UPDATE_NEEDED" == "true" ]]; then
+            # Both versions need updating - include both in the branch name
+            BRANCH_NAME="bot/update-mysql-shell-all-inno${LATEST_INNOVATION}-lts${LATEST_LTS}"
+          elif [[ "$INNOVATION_UPDATE_NEEDED" == "true" ]]; then
+            # Only Innovation needs updating
+            BRANCH_NAME="bot/update-mysql-shell-innovation-${LATEST_INNOVATION}"
+          elif [[ "$LTS_UPDATE_NEEDED" == "true" ]]; then
+            # Only LTS needs updating
+            BRANCH_NAME="bot/update-mysql-shell-lts-${LATEST_LTS}"
+          else
+            # Fallback - should not reach here, but just in case
+            BRANCH_NAME="bot/update-mysql-shell-$(date +%Y%m%d%H%M%S)"
+          fi
           echo "Using branch name: $BRANCH_NAME"
+          
+          # Export as environment variable for scripts that need it
+          export BRANCH_NAME
           
           # Set as output for reuse in subsequent steps
           echo "BRANCH_NAME=${BRANCH_NAME}" >> $GITHUB_OUTPUT
@@ -218,7 +233,8 @@ jobs:
           else
             # If not executable, explicitly use bash
             echo "Running update.sh via bash (no execution permissions)"
-            bash .github/check-new-release/scripts/update.sh
+            # Pass current environment including BRANCH_NAME to the bash process
+            bash -c 'set -e; source .github/check-new-release/scripts/update.sh'
             # Immediately capture exit status to avoid overwrites
             UPDATE_STATUS=$?
           fi
@@ -243,12 +259,30 @@ jobs:
           # Verify branch name is available from previous step
           if [ -z "$BRANCH_NAME" ]; then
             echo "::warning::Branch name not available from previous step"
-            echo "Generating new branch name as fallback"
-            BRANCH_NAME="bot/update-mysql-shell-$(date +%Y%m%d%H%M%S)"
+            echo "Generating fallback branch name based on version information"
+            
+            # Generate branch name using version information even in fallback
+            if [[ "$INNOVATION_UPDATE_NEEDED" == "true" && "$LTS_UPDATE_NEEDED" == "true" ]]; then
+              # Both versions need updating
+              BRANCH_NAME="bot/update-mysql-shell-all-inno${LATEST_INNOVATION}-lts${LATEST_LTS}"
+            elif [[ "$INNOVATION_UPDATE_NEEDED" == "true" ]]; then
+              # Only Innovation needs updating
+              BRANCH_NAME="bot/update-mysql-shell-innovation-${LATEST_INNOVATION}"
+            elif [[ "$LTS_UPDATE_NEEDED" == "true" ]]; then
+              # Only LTS needs updating
+              BRANCH_NAME="bot/update-mysql-shell-lts-${LATEST_LTS}"
+            else
+              # Ultimate fallback with timestamp
+              BRANCH_NAME="bot/update-mysql-shell-fallback-$(date +%Y%m%d%H%M%S)"
+            fi
+            
             echo "Generated fallback branch name: $BRANCH_NAME"
           else
             echo "Using branch name from previous step: $BRANCH_NAME"
           fi
+          
+          # Export as environment variable for scripts that need it
+          export BRANCH_NAME
           
           # Verify that post-message script exists before execution
           if [ ! -f .github/check-new-release/scripts/post-message.sh ]; then
@@ -266,7 +300,8 @@ jobs:
           else
             # If not executable, explicitly use bash
             echo "Running post-message.sh via bash (no execution permissions)"
-            bash .github/check-new-release/scripts/post-message.sh
+            # Pass current environment including BRANCH_NAME to the bash process
+            bash -c 'set -e; source .github/check-new-release/scripts/post-message.sh'
             # Immediately capture exit status to avoid overwrites
             POST_MESSAGE_STATUS=$?
           fi
