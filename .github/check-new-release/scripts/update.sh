@@ -1,14 +1,21 @@
-# !/bin/bash (実行権限を付与せずbashコマンドで実行されるため実際には使用されない)
-# 厳格モードを設定
+# !/bin/bash (This is not used as the script is executed with bash command without execution permission)
+# Set strict mode
 set -eu
 
-# dry runモードを確認
+# Check if in dry run mode
 if [[ "$DRY_RUN" == "true" ]]; then
-  echo "::notice::dry runモードで実行しています。実際の変更は行いません。"
+  echo "::notice::Running in dry run mode. No actual changes will be made."
 fi
 
-# ブランチ作成
-BRANCH_NAME="bot/update-mysql-shell-$(date +%Y%m%d%H%M%S)"
+# Use the BRANCH_NAME environment variable passed from the workflow
+# Verify that BRANCH_NAME is set
+if [[ -z "${BRANCH_NAME:-}" ]]; then
+  echo "::error::BRANCH_NAME environment variable is not set. This should be set by the workflow."
+  exit 1
+fi
+
+echo "Using branch name: $BRANCH_NAME"
+
 if [[ "$DRY_RUN" != "true" ]]; then
   git config --global user.name 'github-actions[bot]'
   git config --global user.email 'github-actions[bot]@users.noreply.github.com'
@@ -17,11 +24,11 @@ else
   echo "dry run: git checkout -b $BRANCH_NAME"
 fi
 
-# PR本文の初期化
+# Initialize PR body
 PR_TEMPLATE=$(cat .github/check-new-release/templates/pr.md)
 PR_BODY=""
 
-# バージョン更新関数
+# Version update function
 update_version() {
   local type=$1
   local current_version=$2
@@ -32,27 +39,27 @@ update_version() {
   
   echo "Updating $type to $new_version (major.minor: $short_version)..."
   
-  # Dockerfile の更新
+  # Update Dockerfile
   if [[ "$DRY_RUN" != "true" ]]; then
     if ! sed -i "s/^ARG MYSQL_SHELL_VERSION=.*/ARG MYSQL_SHELL_VERSION=$new_version/" docker/$type/Dockerfile; then
       echo "::error::Failed to update version in docker/$type/Dockerfile"
-      echo "このエラーは重要なファイル更新に失敗したため、処理を中断します。"
+      echo "This is a critical error while updating an important file. Aborting."
       exit 1
     fi
     
-    # 更新が成功したか検証
+    # Verify the update was successful
     if ! grep -q "ARG MYSQL_SHELL_VERSION=$new_version" docker/$type/Dockerfile; then
       echo "::error::Version update in docker/$type/Dockerfile could not be verified"
-      echo "Dockerfileの更新内容を確認できないため処理を中断します。"
+      echo "Cannot verify Dockerfile update. Aborting."
       exit 1
     fi
   else
-    # dry runモードではより詳細な情報を表示
-    echo "dry run: 実行予定のコマンド: sed -i \"s/^ARG MYSQL_SHELL_VERSION=.*/ARG MYSQL_SHELL_VERSION=$new_version/\" docker/$type/Dockerfile"
-    echo "dry run: docker/$type/Dockerfile 内の ARG MYSQL_SHELL_VERSION=$current_version を $new_version に更新"
+    # Show more detailed information in dry run mode
+    echo "dry run: Command to execute: sed -i \"s/^ARG MYSQL_SHELL_VERSION=.*/ARG MYSQL_SHELL_VERSION=$new_version/\" docker/$type/Dockerfile"
+    echo "dry run: Update ARG MYSQL_SHELL_VERSION=$current_version to $new_version in docker/$type/Dockerfile"
   fi
   
-  # README.md の更新
+  # Update README.md
   if [[ "$type" == "innovation" ]]; then
     local match_pattern="Innovation Series ([0-9]\\.[0-9]\\.[x0-9])"
     local replace_value="Innovation Series (${major_version}.${minor_version}.x)"
@@ -60,24 +67,24 @@ update_version() {
     local tag_replace="snickerjp\/docker-mysql-shell:${short_version}"
     
     if [[ "$DRY_RUN" != "true" ]]; then
-      # READMEの更新は重要だが失敗しても処理は継続する
+      # README updates are important but we continue even if they fail
       sed -i "s/$match_pattern/$replace_value/g" README.md
       if [ $? -ne 0 ]; then
         echo "::warning::Failed to update Innovation Series version in README.md"
-        echo "README.mdの更新に失敗しましたが、処理は継続します。"
+        echo "Failed to update README.md but will continue with the process."
       fi
       
       sed -i "s/$tag_pattern/$tag_replace/g" README.md
       if [ $? -ne 0 ]; then
         echo "::warning::Failed to update Innovation image tag in README.md"
-        echo "README.mdのタグ更新に失敗しましたが、処理は継続します。"
+        echo "Failed to update tag in README.md but will continue with the process."
       fi
     else
-      # dry runモードではより詳細な情報を表示
-      echo "dry run: 実行予定のコマンド: sed -i \"s/$match_pattern/$replace_value/g\" README.md"
-      echo "dry run: 実行予定のコマンド: sed -i \"s/$tag_pattern/$tag_replace/g\" README.md"
-      echo "dry run: README.md 内の '$match_pattern' を '$replace_value' に更新"
-      echo "dry run: README.md 内の '$tag_pattern' を '$tag_replace' に更新"
+      # Show more detailed information in dry run mode
+      echo "dry run: Command to execute: sed -i \"s/$match_pattern/$replace_value/g\" README.md"
+      echo "dry run: Command to execute: sed -i \"s/$tag_pattern/$tag_replace/g\" README.md"
+      echo "dry run: Update '$match_pattern' to '$replace_value' in README.md"
+      echo "dry run: Update '$tag_pattern' to '$tag_replace' in README.md"
     fi
   else
     local match_pattern="LTS Series ([0-9]\\.[0-9]\\.[x0-9])"
@@ -89,118 +96,118 @@ update_version() {
       sed -i "s/$match_pattern/$replace_value/g" README.md
       if [ $? -ne 0 ]; then
         echo "::warning::Failed to update LTS Series version in README.md"
-        echo "README.mdの更新に失敗しましたが、処理は継続します。"
+        echo "Failed to update README.md but will continue with the process."
       fi
       
       sed -i "s/$tag_pattern/$tag_replace/g" README.md
       if [ $? -ne 0 ]; then
         echo "::warning::Failed to update LTS image tag in README.md"
-        echo "README.mdのタグ更新に失敗しましたが、処理は継続します。"
+        echo "Failed to update tag in README.md but will continue with the process."
       fi
     else
-      # dry runモードではより詳細な情報を表示
-      echo "dry run: 実行予定のコマンド: sed -i \"s/$match_pattern/$replace_value/g\" README.md"
-      echo "dry run: 実行予定のコマンド: sed -i \"s/$tag_pattern/$tag_replace/g\" README.md"
-      echo "dry run: README.md 内の '$match_pattern' を '$replace_value' に更新"
-      echo "dry run: README.md 内の '$tag_pattern' を '$tag_replace' に更新"
+      # Show more detailed information in dry run mode
+      echo "dry run: Command to execute: sed -i \"s/$match_pattern/$replace_value/g\" README.md"
+      echo "dry run: Command to execute: sed -i \"s/$tag_pattern/$tag_replace/g\" README.md"
+      echo "dry run: Update '$match_pattern' to '$replace_value' in README.md"
+      echo "dry run: Update '$tag_pattern' to '$tag_replace' in README.md"
     fi
   fi
   
-  # ワークフローファイルの自動更新
+  # Automatically update workflow files
   local workflow_files=$(find .github/workflows -name "docker-*.yml" 2>/dev/null || echo "")
   if [[ -n "$workflow_files" ]]; then
-    echo "ワークフローファイルを自動的に更新します..."
+    echo "Automatically updating workflow files..."
     
     local version_pattern="version: ${major_version}\\.x"
     local version_replace="version: ${short_version}"
     
     if [[ "$DRY_RUN" != "true" ]]; then
-      # 各ファイルに対して実行
+      # Execute for each file
       for workflow_file in $workflow_files; do
         if grep -q "$version_pattern" "$workflow_file"; then
-          echo "更新: $workflow_file"
+          echo "Updating: $workflow_file"
           sed -i "s/$version_pattern/$version_replace/g" "$workflow_file"
           if [ $? -ne 0 ]; then
             echo "::warning::Failed to update version in $workflow_file"
-            echo "ワークフローファイル $workflow_file の更新に失敗しましたが、処理は継続します。"
+            echo "Failed to update workflow file $workflow_file but will continue with the process."
           fi
         else
-          echo "::info::該当するパターンがないため更新不要: $workflow_file"
+          echo "::info::No matching pattern found, no update needed: $workflow_file"
         fi
       done
     else
-      echo "dry run: 以下のファイルを更新予定:"
+      echo "dry run: Files to be updated:"
       for workflow_file in $workflow_files; do
         if grep -q "$version_pattern" "$workflow_file"; then
-          echo "dry run: $workflow_file 内の '$version_pattern' を '$version_replace' に更新"
-          echo "dry run: 実行予定のコマンド: sed -i \"s/$version_pattern/$version_replace/g\" \"$workflow_file\""
+          echo "dry run: Update '$version_pattern' to '$version_replace' in $workflow_file"
+          echo "dry run: Command to execute: sed -i \"s/$version_pattern/$version_replace/g\" \"$workflow_file\""
         fi
       done
     fi
     
-    # PR説明文にワークフローファイル更新の旨を追加
-    PR_BODY="${PR_BODY} (ワークフローファイルも自動的に更新されました)"
+    # Add workflow file update note to PR description
+    PR_BODY="${PR_BODY} (Workflow files were automatically updated)"
   else
-    echo "::warning::ワークフローファイルが見つかりませんでした。"
+    echo "::warning::No workflow files found."
   fi
   
-  # PR本文に変更内容を追加（整形された形式で）
+  # Add version update details to PR body (formatted)
   PR_BODY="${PR_BODY}
 
-### ${type^} バージョン更新
+### ${type^} Version Update
 * **${current_version}** → **${new_version}**"
   
-  # 成功ログ
-  echo "✅ $type のバージョン更新が完了しました"
+  # Success log
+  echo "✅ $type version update completed"
 }
 
-# Innovation の更新
+# Update Innovation
 if [[ "$INNOVATION_UPDATE_NEEDED" == "true" ]]; then
   update_version "innovation" "$CURRENT_INNOVATION" "$LATEST_INNOVATION"
 fi
 
-# LTS の更新
+# Update LTS
 if [[ "$LTS_UPDATE_NEEDED" == "true" ]]; then
   update_version "lts" "$CURRENT_LTS" "$LATEST_LTS"
 fi
 
-# PR本文に必要な手順を追加
+# Add necessary steps to PR body
 PR_BODY="${PR_BODY}
 
-## 更新内容
-- Dockerfileのバージョン番号更新
-- README.mdのバージョン表記を更新
-- ワークフローファイルを自動的に更新
+## Update Content
+- Updated version numbers in Dockerfiles
+- Updated version references in README.md
+- Automatically updated workflow files
 
-## ⚠️ 注意事項
-1. ワークフローファイルの自動更新が行われていない場合は手動で更新してください
-2. マージ前に各ファイルの更新内容を確認してください"
+## ⚠️ Notes
+1. If workflow files were not automatically updated, please update them manually
+2. Please verify all file changes before merging"
 
-# 変更をコミットしてプッシュ
+# Commit and push changes
 changed_files=$(git status --porcelain | awk '{print $2}')
 if [[ -z "$changed_files" ]]; then
   echo "No changes to commit."
   exit 0
 fi
 
-# ファイルの変更をチェック
+# Check changed files
 echo "Changed files:"
 for file in $changed_files; do
   echo "- $file"
 done
 
-# すべての変更をステージング
+# Stage all changes
 if [[ "$DRY_RUN" != "true" ]]; then
   git add $changed_files
   git commit -m "Update MySQL Shell versions (Innovation: $LATEST_INNOVATION, LTS: $LATEST_LTS)"
   
-  # エラーハンドリング付きでプッシュ
+  # Push with error handling
   if ! git push origin $BRANCH_NAME; then
     echo "::error::Failed to push changes to GitHub"
     exit 1
   fi
   
-  # プルリクエストを作成
+  # Create pull request
   if ! gh pr create \
     --base develop \
     --head $BRANCH_NAME \
@@ -212,13 +219,13 @@ if [[ "$DRY_RUN" != "true" ]]; then
   
   echo "Pull request created successfully!"
 else
-  echo "dry run: 以下のファイルが変更されます:"
+  echo "dry run: The following files would be changed:"
   for file in $changed_files; do
     echo "- $file"
   done
-  echo "dry run: コミットメッセージ: Update MySQL Shell versions (Innovation: $LATEST_INNOVATION, LTS: $LATEST_LTS)"
-  echo "dry run: PR作成: タイトル: Update MySQL Shell versions (Innovation: $LATEST_INNOVATION, LTS: $LATEST_LTS)"
-  echo "dry run: PR本文:"
+  echo "dry run: Commit message: Update MySQL Shell versions (Innovation: $LATEST_INNOVATION, LTS: $LATEST_LTS)"
+  echo "dry run: PR creation: Title: Update MySQL Shell versions (Innovation: $LATEST_INNOVATION, LTS: $LATEST_LTS)"
+  echo "dry run: PR body:"
   echo -e "$PR_BODY"
-  echo "dry run終了: 実際の変更は行われていません。"
+  echo "dry run completed: No actual changes were made."
 fi
