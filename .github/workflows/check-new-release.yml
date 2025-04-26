@@ -50,20 +50,20 @@ jobs:
             echo "::error::Required Dockerfiles not found!"
             exit 1
           fi
-          
+
           CURRENT_INNOVATION=$(grep -oP '(?<=^ARG MYSQL_SHELL_VERSION=)\d+\.\d+\.\d+' docker/innovation/Dockerfile)
           CURRENT_LTS=$(grep -oP '(?<=^ARG MYSQL_SHELL_VERSION=)\d+\.\d+\.\d+' docker/lts/Dockerfile)
-          
+
           if [[ -z "$CURRENT_INNOVATION" ]] || [[ -z "$CURRENT_LTS" ]]; then
             echo "::error::Failed to extract current versions from Dockerfiles"
             exit 1
           fi
-          
+
           echo "CURRENT_INNOVATION=${CURRENT_INNOVATION}" >> $GITHUB_OUTPUT
           echo "CURRENT_LTS=${CURRENT_LTS}" >> $GITHUB_OUTPUT
           echo "Current Innovation: $CURRENT_INNOVATION"
           echo "Current LTS: $CURRENT_LTS"
-          
+
           # Extract major versions (for later use)
           INNOVATION_MAJOR_VERSION=$(echo "$CURRENT_INNOVATION" | cut -d. -f1)
           LTS_MAJOR_VERSION=$(echo "$CURRENT_LTS" | cut -d. -f1)
@@ -76,7 +76,7 @@ jobs:
           # Get tag information from GitHub API
           INNOVATION_MAJOR="${{ steps.current_versions.outputs.INNOVATION_MAJOR_VERSION }}"
           LTS_MAJOR="${{ steps.current_versions.outputs.LTS_MAJOR_VERSION }}"
-          
+
           # Use manually specified version for testing if provided
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ github.event.inputs.innovation_version }}" ]]; then
             LATEST_INNOVATION="${{ github.event.inputs.innovation_version }}"
@@ -87,15 +87,15 @@ jobs:
                            -H "X-GitHub-Api-Version: 2022-11-28" \
                            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
                            "https://api.github.com/repos/mysql/mysql-shell/tags?per_page=100")
-            
+
             if [[ -z "$API_RESPONSE" ]] || [[ "$API_RESPONSE" == *"rate limit"* ]] || [[ "$API_RESPONSE" == *"Bad credentials"* ]]; then
               echo "::error::Failed to fetch data from GitHub API: $(echo "$API_RESPONSE" | grep -o '"message":"[^"]*"' || echo 'Unknown error')"
               exit 1
             fi
-            
+
             # Dynamically build regex pattern
             INNOVATION_PATTERN="^${INNOVATION_MAJOR}\\.\\d+\\.\\d+$"
-            
+
             LATEST_INNOVATION=$(echo "$API_RESPONSE" | jq -r --arg pattern "$INNOVATION_PATTERN" '[.[] | select(.name | test($pattern))][0].name')
           fi
 
@@ -108,7 +108,7 @@ jobs:
             LTS_PATTERN="^${LTS_MAJOR}\\.\\d+\\.\\d+$"
             LATEST_LTS=$(echo "$API_RESPONSE" | jq -r --arg pattern "$LTS_PATTERN" '[.[] | select(.name | test($pattern))][0].name')
           fi
-          
+
           # Validate results
           if [[ -z "$LATEST_INNOVATION" ]] || [[ "$LATEST_INNOVATION" == "null" ]] || [[ -z "$LATEST_LTS" ]] || [[ "$LATEST_LTS" == "null" ]]; then
             echo "::warning::Failed to find matching versions. Using hardcoded patterns as fallback."
@@ -116,7 +116,7 @@ jobs:
             LATEST_INNOVATION=${LATEST_INNOVATION:-$(echo "$API_RESPONSE" | jq -r '[.[] | select(.name | test("^9\\.\\d+\\.\\d+$"))][0].name')}
             LATEST_LTS=${LATEST_LTS:-$(echo "$API_RESPONSE" | jq -r '[.[] | select(.name | test("^8\\.\\d+\\.\\d+$"))][0].name')}
           fi
-          
+
           echo "LATEST_INNOVATION=${LATEST_INNOVATION}" >> $GITHUB_OUTPUT
           echo "LATEST_LTS=${LATEST_LTS}" >> $GITHUB_OUTPUT
           echo "Latest Innovation: $LATEST_INNOVATION"
@@ -130,15 +130,15 @@ jobs:
             # Returns 0 if $1 > $2
             test "$(echo "$1 $2" | tr " " "\n" | sort -V | head -n 1)" != "$1"
           }
-          
+
           CURRENT_INNOVATION="${{ steps.current_versions.outputs.CURRENT_INNOVATION }}"
           LATEST_INNOVATION="${{ steps.latest_tags.outputs.LATEST_INNOVATION }}"
           CURRENT_LTS="${{ steps.current_versions.outputs.CURRENT_LTS }}"
           LATEST_LTS="${{ steps.latest_tags.outputs.LATEST_LTS }}"
-          
+
           INNOVATION_UPDATE_NEEDED="false"
           LTS_UPDATE_NEEDED="false"
-          
+
           # Check Innovation version
           if [[ -z "$LATEST_INNOVATION" ]] || [[ "$LATEST_INNOVATION" == "null" ]]; then
             echo "::warning::No valid Innovation version found in API response"
@@ -152,7 +152,7 @@ jobs:
           else
             echo "Innovation is up-to-date at version $CURRENT_INNOVATION."
           fi
-          
+
           # Check LTS version
           if [[ -z "$LATEST_LTS" ]] || [[ "$LATEST_LTS" == "null" ]]; then
             echo "::warning::No valid LTS version found in API response"
@@ -166,7 +166,7 @@ jobs:
           else
             echo "LTS is up-to-date at version $CURRENT_LTS."
           fi
-          
+
           # In test mode, always report updates are needed
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.dry_run }}" == "true" ]]; then
             if [[ -n "${{ github.event.inputs.innovation_version }}" ]]; then
@@ -178,7 +178,7 @@ jobs:
               LTS_UPDATE_NEEDED="true"
             fi
           fi
-          
+
           echo "INNOVATION_UPDATE_NEEDED=${INNOVATION_UPDATE_NEEDED}" >> $GITHUB_OUTPUT
           echo "LTS_UPDATE_NEEDED=${LTS_UPDATE_NEEDED}" >> $GITHUB_OUTPUT
 
@@ -210,19 +210,19 @@ jobs:
             BRANCH_NAME="bot/update-mysql-shell-$(date +%Y%m%d%H%M%S)"
           fi
           echo "Using branch name: $BRANCH_NAME"
-          
+
           # Export as environment variable for scripts that need it
           export BRANCH_NAME
-          
+
           # Set as output for reuse in subsequent steps
           echo "BRANCH_NAME=${BRANCH_NAME}" >> $GITHUB_OUTPUT
-          
+
           # Verify that update script exists before execution
           if [ ! -f .github/check-new-release/scripts/update.sh ]; then
             echo "::error::Script .github/check-new-release/scripts/update.sh not found"
             exit 1
           fi
-          
+
           # Check if the script has execution permissions and capture exit status immediately
           if [ -x .github/check-new-release/scripts/update.sh ]; then
             # If executable, run directly
@@ -238,7 +238,7 @@ jobs:
             # Immediately capture exit status to avoid overwrites
             UPDATE_STATUS=$?
           fi
-          
+
           # Check exit status
           if [ $UPDATE_STATUS -ne 0 ]; then
             echo "::error::Script update.sh exited with status $UPDATE_STATUS"
@@ -260,7 +260,7 @@ jobs:
           if [ -z "$BRANCH_NAME" ]; then
             echo "::warning::Branch name not available from previous step"
             echo "Generating fallback branch name based on version information"
-            
+
             # Generate branch name using version information even in fallback
             if [[ "$INNOVATION_UPDATE_NEEDED" == "true" && "$LTS_UPDATE_NEEDED" == "true" ]]; then
               # Both versions need updating
@@ -275,21 +275,21 @@ jobs:
               # Ultimate fallback with timestamp
               BRANCH_NAME="bot/update-mysql-shell-fallback-$(date +%Y%m%d%H%M%S)"
             fi
-            
+
             echo "Generated fallback branch name: $BRANCH_NAME"
           else
             echo "Using branch name from previous step: $BRANCH_NAME"
           fi
-          
+
           # Export as environment variable for scripts that need it
           export BRANCH_NAME
-          
+
           # Verify that post-message script exists before execution
           if [ ! -f .github/check-new-release/scripts/post-message.sh ]; then
             echo "::error::Script post-message.sh not found"
             exit 1
           fi
-          
+
           # Check if the script has execution permissions and capture exit status immediately
           if [ -x .github/check-new-release/scripts/post-message.sh ]; then
             # If executable, run directly
@@ -305,7 +305,7 @@ jobs:
             # Immediately capture exit status to avoid overwrites
             POST_MESSAGE_STATUS=$?
           fi
-          
+
           # Check exit status
           if [ $POST_MESSAGE_STATUS -ne 0 ]; then
             echo "::error::Script post-message.sh exited with status $POST_MESSAGE_STATUS"
