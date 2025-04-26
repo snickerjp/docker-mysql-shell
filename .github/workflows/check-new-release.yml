@@ -1,0 +1,206 @@
+name: Check for new MySQL Shell releases
+
+on:
+  schedule:
+    # 毎日 UTC 3時17分に実行 (ランダムな時刻で負荷分散)
+    - cron: '17 3 * * *'
+  workflow_dispatch: # 手動実行も可能にする
+
+jobs:
+  check-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # プルリクエスト作成のためにトークンが必要
+          token: ${{ secrets.GITHUB_TOKEN }} # または PAT
+
+      - name: Get current versions
+        id: current_versions
+        run: |
+          # Dockerfileから現在のバージョンを取得
+          if [[ ! -f docker/innovation/Dockerfile ]] || [[ ! -f docker/lts/Dockerfile ]]; then
+            echo "::error::Required Dockerfiles not found!"
+            exit 1
+          fi
+          
+          CURRENT_INNOVATION=$(grep -oP '(?<=^ARG MYSQL_SHELL_VERSION=)\d+\.\d+\.\d+' docker/innovation/Dockerfile)
+          CURRENT_LTS=$(grep -oP '(?<=^ARG MYSQL_SHELL_VERSION=)\d+\.\d+\.\d+' docker/lts/Dockerfile)
+          
+          if [[ -z "$CURRENT_INNOVATION" ]] || [[ -z "$CURRENT_LTS" ]]; then
+            echo "::error::Failed to extract current versions from Dockerfiles"
+            exit 1
+          fi
+          
+          echo "CURRENT_INNOVATION=${CURRENT_INNOVATION}" >> $GITHUB_OUTPUT
+          echo "CURRENT_LTS=${CURRENT_LTS}" >> $GITHUB_OUTPUT
+          echo "Current Innovation: $CURRENT_INNOVATION"
+          echo "Current LTS: $CURRENT_LTS"
+          
+          # メジャーバージョンを抽出 (後で使用)
+          INNOVATION_MAJOR_VERSION=$(echo "$CURRENT_INNOVATION" | cut -d. -f1)
+          LTS_MAJOR_VERSION=$(echo "$CURRENT_LTS" | cut -d. -f1)
+          echo "INNOVATION_MAJOR_VERSION=${INNOVATION_MAJOR_VERSION}" >> $GITHUB_OUTPUT
+          echo "LTS_MAJOR_VERSION=${LTS_MAJOR_VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Get latest MySQL Shell tags
+        id: latest_tags
+        run: |
+          # GitHub APIからタグ情報を取得
+          INNOVATION_MAJOR="${{ steps.current_versions.outputs.INNOVATION_MAJOR_VERSION }}"
+          LTS_MAJOR="${{ steps.current_versions.outputs.LTS_MAJOR_VERSION }}"
+          
+          API_RESPONSE=$(curl -s -H "Accept: application/vnd.github+json" https://api.github.com/repos/mysql/mysql-shell/tags)
+          
+          if [[ -z "$API_RESPONSE" ]] || [[ "$API_RESPONSE" == *"rate limit"* ]]; then
+            echo "::error::Failed to fetch data from GitHub API or rate limit exceeded"
+            exit 1
+          fi
+          
+          # 正規表現パターンを動的に構築
+          INNOVATION_PATTERN="^${INNOVATION_MAJOR}\\.\\d+\\.\\d+$"
+          LTS_PATTERN="^${LTS_MAJOR}\\.\\d+\\.\\d+$"
+          
+          LATEST_INNOVATION=$(echo "$API_RESPONSE" | jq -r --arg pattern "$INNOVATION_PATTERN" '[.[] | select(.name | test($pattern))][0].name')
+          LATEST_LTS=$(echo "$API_RESPONSE" | jq -r --arg pattern "$LTS_PATTERN" '[.[] | select(.name | test($pattern))][0].name')
+          
+          if [[ -z "$LATEST_INNOVATION" ]] || [[ "$LATEST_INNOVATION" == "null" ]] || [[ -z "$LATEST_LTS" ]] || [[ "$LATEST_LTS" == "null" ]]; then
+            echo "::warning::Failed to find matching versions. Using hardcoded patterns as fallback."
+            # フォールバック: ハードコードされたバージョンパターン
+            LATEST_INNOVATION=$(echo "$API_RESPONSE" | jq -r '[.[] | select(.name | test("^9\\.\\d+\\.\\d+$"))][0].name')
+            LATEST_LTS=$(echo "$API_RESPONSE" | jq -r '[.[] | select(.name | test("^8\\.\\d+\\.\\d+$"))][0].name')
+          fi
+          
+          echo "LATEST_INNOVATION=${LATEST_INNOVATION}" >> $GITHUB_OUTPUT
+          echo "LATEST_LTS=${LATEST_LTS}" >> $GITHUB_OUTPUT
+          echo "Latest Innovation: $LATEST_INNOVATION"
+          echo "Latest LTS: $LATEST_LTS"
+
+      - name: Check versions
+        id: check_versions
+        run: |
+          CURRENT_INNOVATION="${{ steps.current_versions.outputs.CURRENT_INNOVATION }}"
+          LATEST_INNOVATION="${{ steps.latest_tags.outputs.LATEST_INNOVATION }}"
+          CURRENT_LTS="${{ steps.current_versions.outputs.CURRENT_LTS }}"
+          LATEST_LTS="${{ steps.latest_tags.outputs.LATEST_LTS }}"
+          
+          INNOVATION_UPDATE_NEEDED="false"
+          LTS_UPDATE_NEEDED="false"
+          
+          if [[ -z "$LATEST_INNOVATION" ]] || [[ "$LATEST_INNOVATION" == "null" ]]; then
+            echo "::warning::No valid Innovation version found in API response"
+          elif [[ "$CURRENT_INNOVATION" != "$LATEST_INNOVATION" ]]; then
+            echo "Update needed for Innovation: $CURRENT_INNOVATION -> $LATEST_INNOVATION"
+            INNOVATION_UPDATE_NEEDED="true"
+          else
+            echo "Innovation is up-to-date."
+          fi
+          
+          if [[ -z "$LATEST_LTS" ]] || [[ "$LATEST_LTS" == "null" ]]; then
+            echo "::warning::No valid LTS version found in API response"
+          elif [[ "$CURRENT_LTS" != "$LATEST_LTS" ]]; then
+            echo "Update needed for LTS: $CURRENT_LTS -> $LATEST_LTS"
+            LTS_UPDATE_NEEDED="true"
+          else
+            echo "LTS is up-to-date."
+          fi
+          
+          echo "INNOVATION_UPDATE_NEEDED=${INNOVATION_UPDATE_NEEDED}" >> $GITHUB_OUTPUT
+          echo "LTS_UPDATE_NEEDED=${LTS_UPDATE_NEEDED}" >> $GITHUB_OUTPUT
+
+      - name: Update files and create PR if needed
+        if: steps.check_versions.outputs.INNOVATION_UPDATE_NEEDED == 'true' || steps.check_versions.outputs.LTS_UPDATE_NEEDED == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CURRENT_INNOVATION: ${{ steps.current_versions.outputs.CURRENT_INNOVATION }}
+          LATEST_INNOVATION: ${{ steps.latest_tags.outputs.LATEST_INNOVATION }}
+          CURRENT_LTS: ${{ steps.current_versions.outputs.CURRENT_LTS }}
+          LATEST_LTS: ${{ steps.latest_tags.outputs.LATEST_LTS }}
+        run: |
+          # ブランチ作成
+          BRANCH_NAME="bot/update-mysql-shell-$(date +%Y%m%d%H%M%S)"
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git checkout -b $BRANCH_NAME
+          
+          PR_BODY="Automated update for MySQL Shell versions.\n\n"
+          
+          # バージョン更新関数
+          update_version() {
+            local type=$1
+            local current_version=$2
+            local new_version=$3
+            local major_version=$(echo "$new_version" | cut -d. -f1)
+            local minor_version=$(echo "$new_version" | cut -d. -f2)
+            local short_version="${major_version}.${minor_version}"
+            
+            echo "Updating $type to $new_version..."
+            
+            # Dockerfile の更新
+            sed -i "s/^ARG MYSQL_SHELL_VERSION=.*/ARG MYSQL_SHELL_VERSION=$new_version/" docker/$type/Dockerfile
+            
+            # マークダウンファイルの更新
+            sed -i "s/MySQL Shell ${current_version}/MySQL Shell ${new_version}/g" Repository.md
+            sed -i "s/snickerjp\/docker-mysql-shell:${current_version}/snickerjp\/docker-mysql-shell:${new_version}/g" Repository.md
+            
+            # README.md の更新
+            if [[ "$type" == "innovation" ]]; then
+              sed -i "s/Innovation Series ([0-9]\\.[0-9]\\.[x0-9])/Innovation Series (${major_version}.${minor_version}.x)/g" README.md
+              sed -i "s/snickerjp\/docker-mysql-shell:${major_version}\\.[0-9]/snickerjp\/docker-mysql-shell:${short_version}/g" README.md
+            else
+              sed -i "s/LTS Series ([0-9]\\.[0-9]\\.[x0-9])/LTS Series (${major_version}.${minor_version}.x)/g" README.md
+              sed -i "s/snickerjp\/docker-mysql-shell:${major_version}\\.[0-9]/snickerjp\/docker-mysql-shell:${short_version}/g" README.md
+            fi
+            
+            # GitHub Actions ワークフローファイルの更新
+            for workflow in .github/workflows/docker-*.yml; do
+              if [[ -f "$workflow" ]]; then
+                sed -i "s/version: ${major_version}\\.[0-9]/version: ${short_version}/g" "$workflow"
+              fi
+            done
+            
+            PR_BODY+="*   **${type^}:** ${current_version} -> ${new_version}\n"
+          }
+          
+          # Innovation の更新
+          if [[ "${{ steps.check_versions.outputs.INNOVATION_UPDATE_NEEDED }}" == "true" ]]; then
+            update_version "innovation" "$CURRENT_INNOVATION" "$LATEST_INNOVATION"
+          fi
+          
+          # LTS の更新
+          if [[ "${{ steps.check_versions.outputs.LTS_UPDATE_NEEDED }}" == "true" ]]; then
+            update_version "lts" "$CURRENT_LTS" "$LATEST_LTS"
+          fi
+          
+          # 変更をコミットしてプッシュ
+          changed_files=$(git status --porcelain | awk '{print $2}')
+          if [[ -z "$changed_files" ]]; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          
+          git add $changed_files
+          git commit -m "Update MySQL Shell versions (Innovation: $LATEST_INNOVATION, LTS: $LATEST_LTS)"
+          
+          # エラーハンドリング付きでプッシュ
+          if ! git push origin $BRANCH_NAME; then
+            echo "::error::Failed to push changes to GitHub"
+            exit 1
+          fi
+          
+          # プルリクエストを作成
+          if ! gh pr create \
+            --base develop \
+            --head $BRANCH_NAME \
+            --title "Update MySQL Shell versions (Innovation: $LATEST_INNOVATION, LTS: $LATEST_LTS)" \
+            --body "$PR_BODY"; then
+            echo "::error::Failed to create Pull Request"
+            exit 1
+          fi
+          
+          echo "Pull request created successfully!"
+
+      - name: No update needed
+        if: steps.check_versions.outputs.INNOVATION_UPDATE_NEEDED == 'false' && steps.check_versions.outputs.LTS_UPDATE_NEEDED == 'false'
+        run: echo "No new MySQL Shell versions found. All versions are up to date."
