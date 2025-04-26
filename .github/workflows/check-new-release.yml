@@ -1,0 +1,321 @@
+name: Check for new MySQL Shell releases
+
+# This workflow does the following:
+# 1. Detect the latest MySQL Shell release tags
+# 2. Compare with current Docker image versions
+# 3. Automatically create a PR if updates are needed
+
+on:
+  schedule:
+    # Run at 3:17 UTC daily (random time to distribute load)
+    - cron: '17 3 * * *'
+  workflow_dispatch: # Enable manual execution
+    inputs:
+      dry_run:
+        description: 'Test run without creating actual PR'
+        required: false
+        default: false
+        type: boolean
+      innovation_version:
+        description: 'Force Innovation version for testing (e.g.: 9.3.0)'
+        required: false
+        type: string
+      lts_version:
+        description: 'Force LTS version for testing (e.g.: 8.4.5)'
+        required: false
+        type: string
+
+jobs:
+  check-release:
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write  # Correct permission to modify workflow files
+    runs-on: ubuntu-latest
+    # Job description
+    name: Check and update MySQL Shell versions
+    steps:
+      # Step 1: Get the repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Token needed for PR creation
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get current versions
+        id: current_versions
+        run: |
+          # Get current versions from Dockerfiles
+          if [[ ! -f docker/innovation/Dockerfile ]] || [[ ! -f docker/lts/Dockerfile ]]; then
+            echo "::error::Required Dockerfiles not found!"
+            exit 1
+          fi
+
+          CURRENT_INNOVATION=$(grep -oP '(?<=^ARG MYSQL_SHELL_VERSION=)\d+\.\d+\.\d+' docker/innovation/Dockerfile)
+          CURRENT_LTS=$(grep -oP '(?<=^ARG MYSQL_SHELL_VERSION=)\d+\.\d+\.\d+' docker/lts/Dockerfile)
+
+          if [[ -z "$CURRENT_INNOVATION" ]] || [[ -z "$CURRENT_LTS" ]]; then
+            echo "::error::Failed to extract current versions from Dockerfiles"
+            exit 1
+          fi
+
+          echo "CURRENT_INNOVATION=${CURRENT_INNOVATION}" >> $GITHUB_OUTPUT
+          echo "CURRENT_LTS=${CURRENT_LTS}" >> $GITHUB_OUTPUT
+          echo "Current Innovation: $CURRENT_INNOVATION"
+          echo "Current LTS: $CURRENT_LTS"
+
+          # Extract major versions (for later use)
+          INNOVATION_MAJOR_VERSION=$(echo "$CURRENT_INNOVATION" | cut -d. -f1)
+          LTS_MAJOR_VERSION=$(echo "$CURRENT_LTS" | cut -d. -f1)
+          echo "INNOVATION_MAJOR_VERSION=${INNOVATION_MAJOR_VERSION}" >> $GITHUB_OUTPUT
+          echo "LTS_MAJOR_VERSION=${LTS_MAJOR_VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Get latest MySQL Shell tags
+        id: latest_tags
+        run: |
+          # Get tag information from GitHub API
+          INNOVATION_MAJOR="${{ steps.current_versions.outputs.INNOVATION_MAJOR_VERSION }}"
+          LTS_MAJOR="${{ steps.current_versions.outputs.LTS_MAJOR_VERSION }}"
+
+          # Use manually specified version for testing if provided
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ github.event.inputs.innovation_version }}" ]]; then
+            LATEST_INNOVATION="${{ github.event.inputs.innovation_version }}"
+            echo "Using manually specified Innovation version: $LATEST_INNOVATION"
+          else
+            # Try to fetch from GitHub API
+            API_RESPONSE=$(curl -s -H "Accept: application/vnd.github+json" \
+                           -H "X-GitHub-Api-Version: 2022-11-28" \
+                           -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+                           "https://api.github.com/repos/mysql/mysql-shell/tags?per_page=100")
+
+            if [[ -z "$API_RESPONSE" ]] || [[ "$API_RESPONSE" == *"rate limit"* ]] || [[ "$API_RESPONSE" == *"Bad credentials"* ]]; then
+              echo "::error::Failed to fetch data from GitHub API: $(echo "$API_RESPONSE" | grep -o '"message":"[^"]*"' || echo 'Unknown error')"
+              exit 1
+            fi
+
+            # Dynamically build regex pattern
+            INNOVATION_PATTERN="^${INNOVATION_MAJOR}\\.\\d+\\.\\d+$"
+
+            LATEST_INNOVATION=$(echo "$API_RESPONSE" | jq -r --arg pattern "$INNOVATION_PATTERN" '[.[] | select(.name | test($pattern))][0].name')
+          fi
+
+          # Get LTS version (manual or API)
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ github.event.inputs.lts_version }}" ]]; then
+            LATEST_LTS="${{ github.event.inputs.lts_version }}"
+            echo "Using manually specified LTS version: $LATEST_LTS"
+          else
+            # Reuse API response
+            LTS_PATTERN="^${LTS_MAJOR}\\.\\d+\\.\\d+$"
+            LATEST_LTS=$(echo "$API_RESPONSE" | jq -r --arg pattern "$LTS_PATTERN" '[.[] | select(.name | test($pattern))][0].name')
+          fi
+
+          # Validate results
+          if [[ -z "$LATEST_INNOVATION" ]] || [[ "$LATEST_INNOVATION" == "null" ]] || [[ -z "$LATEST_LTS" ]] || [[ "$LATEST_LTS" == "null" ]]; then
+            echo "::warning::Failed to find matching versions. Using hardcoded patterns as fallback."
+            # Fallback: hardcoded version patterns
+            LATEST_INNOVATION=${LATEST_INNOVATION:-$(echo "$API_RESPONSE" | jq -r '[.[] | select(.name | test("^9\\.\\d+\\.\\d+$"))][0].name')}
+            LATEST_LTS=${LATEST_LTS:-$(echo "$API_RESPONSE" | jq -r '[.[] | select(.name | test("^8\\.\\d+\\.\\d+$"))][0].name')}
+          fi
+
+          echo "LATEST_INNOVATION=${LATEST_INNOVATION}" >> $GITHUB_OUTPUT
+          echo "LATEST_LTS=${LATEST_LTS}" >> $GITHUB_OUTPUT
+          echo "Latest Innovation: $LATEST_INNOVATION"
+          echo "Latest LTS: $LATEST_LTS"
+
+      - name: Check versions
+        id: check_versions
+        run: |
+          # Version comparison utility function
+          version_gt() {
+            # Returns 0 if $1 > $2
+            test "$(echo "$1 $2" | tr " " "\n" | sort -V | head -n 1)" != "$1"
+          }
+
+          CURRENT_INNOVATION="${{ steps.current_versions.outputs.CURRENT_INNOVATION }}"
+          LATEST_INNOVATION="${{ steps.latest_tags.outputs.LATEST_INNOVATION }}"
+          CURRENT_LTS="${{ steps.current_versions.outputs.CURRENT_LTS }}"
+          LATEST_LTS="${{ steps.latest_tags.outputs.LATEST_LTS }}"
+
+          INNOVATION_UPDATE_NEEDED="false"
+          LTS_UPDATE_NEEDED="false"
+
+          # Check Innovation version
+          if [[ -z "$LATEST_INNOVATION" ]] || [[ "$LATEST_INNOVATION" == "null" ]]; then
+            echo "::warning::No valid Innovation version found in API response"
+          elif [[ "$CURRENT_INNOVATION" != "$LATEST_INNOVATION" ]]; then
+            if version_gt "$LATEST_INNOVATION" "$CURRENT_INNOVATION"; then
+              echo "Update needed for Innovation: $CURRENT_INNOVATION -> $LATEST_INNOVATION (newer version available)"
+              INNOVATION_UPDATE_NEEDED="true"
+            else
+              echo "::warning::Latest Innovation version ($LATEST_INNOVATION) is older than current ($CURRENT_INNOVATION). Skipping update."
+            fi
+          else
+            echo "Innovation is up-to-date at version $CURRENT_INNOVATION."
+          fi
+
+          # Check LTS version
+          if [[ -z "$LATEST_LTS" ]] || [[ "$LATEST_LTS" == "null" ]]; then
+            echo "::warning::No valid LTS version found in API response"
+          elif [[ "$CURRENT_LTS" != "$LATEST_LTS" ]]; then
+            if version_gt "$LATEST_LTS" "$CURRENT_LTS"; then
+              echo "Update needed for LTS: $CURRENT_LTS -> $LATEST_LTS (newer version available)"
+              LTS_UPDATE_NEEDED="true"
+            else
+              echo "::warning::Latest LTS version ($LATEST_LTS) is older than current ($CURRENT_LTS). Skipping update."
+            fi
+          else
+            echo "LTS is up-to-date at version $CURRENT_LTS."
+          fi
+
+          # In test mode, always report updates are needed
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.dry_run }}" == "true" ]]; then
+            if [[ -n "${{ github.event.inputs.innovation_version }}" ]]; then
+              echo "::notice::Test mode: Running Innovation update test"
+              INNOVATION_UPDATE_NEEDED="true"
+            fi
+            if [[ -n "${{ github.event.inputs.lts_version }}" ]]; then
+              echo "::notice::Test mode: Running LTS update test"
+              LTS_UPDATE_NEEDED="true"
+            fi
+          fi
+
+          echo "INNOVATION_UPDATE_NEEDED=${INNOVATION_UPDATE_NEEDED}" >> $GITHUB_OUTPUT
+          echo "LTS_UPDATE_NEEDED=${LTS_UPDATE_NEEDED}" >> $GITHUB_OUTPUT
+
+      - name: Update files and create PR if needed
+        id: update_pr
+        if: steps.check_versions.outputs.INNOVATION_UPDATE_NEEDED == 'true' || steps.check_versions.outputs.LTS_UPDATE_NEEDED == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CURRENT_INNOVATION: ${{ steps.current_versions.outputs.CURRENT_INNOVATION }}
+          LATEST_INNOVATION: ${{ steps.latest_tags.outputs.LATEST_INNOVATION }}
+          CURRENT_LTS: ${{ steps.current_versions.outputs.CURRENT_LTS }}
+          LATEST_LTS: ${{ steps.latest_tags.outputs.LATEST_LTS }}
+          DRY_RUN: ${{ github.event.inputs.dry_run == 'true' }}
+          INNOVATION_UPDATE_NEEDED: ${{ steps.check_versions.outputs.INNOVATION_UPDATE_NEEDED }}
+          LTS_UPDATE_NEEDED: ${{ steps.check_versions.outputs.LTS_UPDATE_NEEDED }}
+        run: |
+          # Generate branch name using version information instead of timestamp
+          if [[ "$INNOVATION_UPDATE_NEEDED" == "true" && "$LTS_UPDATE_NEEDED" == "true" ]]; then
+            # Both versions need updating - include both in the branch name
+            BRANCH_NAME="bot/update-mysql-shell-all-inno${LATEST_INNOVATION}-lts${LATEST_LTS}"
+          elif [[ "$INNOVATION_UPDATE_NEEDED" == "true" ]]; then
+            # Only Innovation needs updating
+            BRANCH_NAME="bot/update-mysql-shell-innovation-${LATEST_INNOVATION}"
+          elif [[ "$LTS_UPDATE_NEEDED" == "true" ]]; then
+            # Only LTS needs updating
+            BRANCH_NAME="bot/update-mysql-shell-lts-${LATEST_LTS}"
+          else
+            # Fallback - should not reach here, but just in case
+            BRANCH_NAME="bot/update-mysql-shell-$(date +%Y%m%d%H%M%S)"
+          fi
+          echo "Using branch name: $BRANCH_NAME"
+
+          # Export as environment variable for scripts that need it
+          export BRANCH_NAME
+
+          # Set as output for reuse in subsequent steps
+          echo "BRANCH_NAME=${BRANCH_NAME}" >> $GITHUB_OUTPUT
+
+          # Verify that update script exists before execution
+          if [ ! -f .github/check-new-release/scripts/update.sh ]; then
+            echo "::error::Script .github/check-new-release/scripts/update.sh not found"
+            exit 1
+          fi
+
+          # Check if the script has execution permissions and capture exit status immediately
+          if [ -x .github/check-new-release/scripts/update.sh ]; then
+            # If executable, run directly
+            echo "Running update.sh with execution permissions"
+            .github/check-new-release/scripts/update.sh
+            # Immediately capture exit status to avoid overwrites
+            UPDATE_STATUS=$?
+          else
+            # If not executable, explicitly use bash
+            echo "Running update.sh via bash (no execution permissions)"
+            # Pass current environment including BRANCH_NAME to the bash process
+            bash -c 'set -e; source .github/check-new-release/scripts/update.sh'
+            # Immediately capture exit status to avoid overwrites
+            UPDATE_STATUS=$?
+          fi
+
+          # Check exit status
+          if [ $UPDATE_STATUS -ne 0 ]; then
+            echo "::error::Script update.sh exited with status $UPDATE_STATUS"
+            exit $UPDATE_STATUS
+          fi
+
+      # Show additional messages after PR creation
+      - name: Show post-PR creation message
+        if: steps.check_versions.outputs.INNOVATION_UPDATE_NEEDED == 'true' || steps.check_versions.outputs.LTS_UPDATE_NEEDED == 'true'
+        env:
+          DRY_RUN: ${{ github.event.inputs.dry_run == 'true' }}
+          INNOVATION_UPDATE_NEEDED: ${{ steps.check_versions.outputs.INNOVATION_UPDATE_NEEDED }}
+          LTS_UPDATE_NEEDED: ${{ steps.check_versions.outputs.LTS_UPDATE_NEEDED }}
+          LATEST_INNOVATION: ${{ steps.latest_tags.outputs.LATEST_INNOVATION }}
+          LATEST_LTS: ${{ steps.latest_tags.outputs.LATEST_LTS }}
+          BRANCH_NAME: ${{ steps.update_pr.outputs.BRANCH_NAME }}
+        run: |
+          # Verify branch name is available from previous step
+          if [ -z "$BRANCH_NAME" ]; then
+            echo "::warning::Branch name not available from previous step"
+            echo "Generating fallback branch name based on version information"
+
+            # Generate branch name using version information even in fallback
+            if [[ "$INNOVATION_UPDATE_NEEDED" == "true" && "$LTS_UPDATE_NEEDED" == "true" ]]; then
+              # Both versions need updating
+              BRANCH_NAME="bot/update-mysql-shell-all-inno${LATEST_INNOVATION}-lts${LATEST_LTS}"
+            elif [[ "$INNOVATION_UPDATE_NEEDED" == "true" ]]; then
+              # Only Innovation needs updating
+              BRANCH_NAME="bot/update-mysql-shell-innovation-${LATEST_INNOVATION}"
+            elif [[ "$LTS_UPDATE_NEEDED" == "true" ]]; then
+              # Only LTS needs updating
+              BRANCH_NAME="bot/update-mysql-shell-lts-${LATEST_LTS}"
+            else
+              # Ultimate fallback with timestamp
+              BRANCH_NAME="bot/update-mysql-shell-fallback-$(date +%Y%m%d%H%M%S)"
+            fi
+
+            echo "Generated fallback branch name: $BRANCH_NAME"
+          else
+            echo "Using branch name from previous step: $BRANCH_NAME"
+          fi
+
+          # Export as environment variable for scripts that need it
+          export BRANCH_NAME
+
+          # Verify that post-message script exists before execution
+          if [ ! -f .github/check-new-release/scripts/post-message.sh ]; then
+            echo "::error::Script post-message.sh not found"
+            exit 1
+          fi
+
+          # Check if the script has execution permissions and capture exit status immediately
+          if [ -x .github/check-new-release/scripts/post-message.sh ]; then
+            # If executable, run directly
+            echo "Running post-message.sh with execution permissions"
+            .github/check-new-release/scripts/post-message.sh
+            # Immediately capture exit status to avoid overwrites
+            POST_MESSAGE_STATUS=$?
+          else
+            # If not executable, explicitly use bash
+            echo "Running post-message.sh via bash (no execution permissions)"
+            # Pass current environment including BRANCH_NAME to the bash process
+            bash -c 'set -e; source .github/check-new-release/scripts/post-message.sh'
+            # Immediately capture exit status to avoid overwrites
+            POST_MESSAGE_STATUS=$?
+          fi
+
+          # Check exit status
+          if [ $POST_MESSAGE_STATUS -ne 0 ]; then
+            echo "::error::Script post-message.sh exited with status $POST_MESSAGE_STATUS"
+            exit $POST_MESSAGE_STATUS
+          fi
+
+      # Step 6: Notification when no update is needed
+      - name: No update needed
+        if: steps.check_versions.outputs.INNOVATION_UPDATE_NEEDED == 'false' && steps.check_versions.outputs.LTS_UPDATE_NEEDED == 'false'
+        run: |
+          echo "::notice::No new MySQL Shell versions found. All versions are up to date."
+          echo "Current Innovation: ${{ steps.current_versions.outputs.CURRENT_INNOVATION }}"
+          echo "Current LTS: ${{ steps.current_versions.outputs.CURRENT_LTS }}"
