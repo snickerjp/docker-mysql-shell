@@ -40,7 +40,7 @@ jobs:
           script: |
             const prNumber = context.payload.pull_request.number;
             const branchName = context.payload.pull_request.head.ref;
-            
+
             if (!branchName.startsWith('feat-')) {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
