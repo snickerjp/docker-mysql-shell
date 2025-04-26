@@ -28,6 +28,9 @@ fi
 PR_TEMPLATE=$(cat .github/check-new-release/templates/pr.md)
 PR_BODY=""
 
+# Initialize workflow update status flag
+WORKFLOW_UPDATED="false"
+
 # Version update function
 update_version() {
   local type=$1
@@ -113,48 +116,54 @@ update_version() {
     fi
   fi
   
-  # Automatically update workflow files
+  # Check workflow files for potential updates (but don't modify)
   local workflow_files=$(find .github/workflows -name "docker-*.yml" 2>/dev/null || echo "")
   if [[ -n "$workflow_files" ]]; then
-    echo "Automatically updating workflow files..."
+    echo "Checking workflow files for necessary updates (will not modify them)..."
     
     local version_pattern="version: ${major_version}\\.x"
     local version_replace="version: ${short_version}"
     
-    if [[ "$DRY_RUN" != "true" ]]; then
-      # Execute for each file
-      for workflow_file in $workflow_files; do
-        if grep -q "$version_pattern" "$workflow_file"; then
-          echo "Updating: $workflow_file"
-          sed -i "s/$version_pattern/$version_replace/g" "$workflow_file"
-          if [ $? -ne 0 ]; then
-            echo "::warning::Failed to update version in $workflow_file"
-            echo "Failed to update workflow file $workflow_file but will continue with the process."
-          fi
-        else
-          echo "::info::No matching pattern found, no update needed: $workflow_file"
-        fi
-      done
-    else
-      echo "dry run: Files to be updated:"
-      for workflow_file in $workflow_files; do
-        if grep -q "$version_pattern" "$workflow_file"; then
-          echo "dry run: Update '$version_pattern' to '$version_replace' in $workflow_file"
-          echo "dry run: Command to execute: sed -i \"s/$version_pattern/$version_replace/g\" \"$workflow_file\""
-        fi
-      done
-    fi
+    # Create a section in PR body for workflow file updates
+    WORKFLOW_INSTRUCTIONS=""
+    local any_needs_update=false
     
-    # Add workflow file update note to PR description
-    PR_BODY="${PR_BODY} (Workflow files were automatically updated)"
+    # Check each workflow file
+    for workflow_file in $workflow_files; do
+      if grep -q "$version_pattern" "$workflow_file"; then
+        any_needs_update=true
+        echo "Found workflow file needing update: $workflow_file"
+        
+        # Get the line number and context for the PR description
+        local line_info=$(grep -n "$version_pattern" "$workflow_file")
+        local line_num=$(echo "$line_info" | cut -d':' -f1)
+        local line_content=$(echo "$line_info" | cut -d':' -f2-)
+        
+        # Add to workflow update instructions
+        WORKFLOW_INSTRUCTIONS="${WORKFLOW_INSTRUCTIONS}
+- **$workflow_file** (line $line_num):
+  - From: \`$line_content\`
+  - To: \`$(echo "$line_content" | sed "s/$version_pattern/$version_replace/")\`"
+      else
+        echo "::info::No matching pattern found, no update needed: $workflow_file"
+      fi
+    done
+    
+    # Set flag if any workflows need updates
+    if [[ "$any_needs_update" == "true" ]]; then
+      WORKFLOW_UPDATED="true"
+      echo "⚠️ Found workflow files that need manual updates (details will be in PR description)"
+    fi
   else
     echo "::warning::No workflow files found."
+    # No files found
+    echo "⚠️ No workflow files found for checking"
   fi
   
   # Add version update details to PR body (formatted)
   PR_BODY="${PR_BODY}
 
-### ${type^} Version Update
+### $(if [[ "$type" == "lts" ]]; then echo "LTS"; else echo "${type^}"; fi) Version Update
 * **${current_version}** → **${new_version}**"
   
   # Success log
@@ -176,12 +185,31 @@ PR_BODY="${PR_BODY}
 
 ## Update Content
 - Updated version numbers in Dockerfiles
-- Updated version references in README.md
-- Automatically updated workflow files
+- Updated version references in README.md"
+
+# Add workflow update instructions if needed
+if [[ "${WORKFLOW_UPDATED:-}" == "true" && -n "${WORKFLOW_INSTRUCTIONS:-}" ]]; then
+  PR_BODY="${PR_BODY}
+
+## ⚠️ Required Manual Updates for Workflow Files
+For security reasons, workflow files cannot be automatically updated by GitHub Actions.
+Please manually update the following files:
+${WORKFLOW_INSTRUCTIONS}
+
+You can apply these changes by:
+1. Checking out the branch: \`git checkout ${BRANCH_NAME}\`
+2. Making the changes shown above
+3. Committing and pushing: \`git commit -am 'Update workflow versions' && git push\`"
+else
+  PR_BODY="${PR_BODY}
+- ✓ No workflow file updates needed"
+fi
+
+PR_BODY="${PR_BODY}
 
 ## ⚠️ Notes
-1. If workflow files were not automatically updated, please update them manually
-2. Please verify all file changes before merging"
+1. Please verify all file changes before merging
+2. Workflow files require manual updates (if any are listed above)"
 
 # Commit and push changes
 changed_files=$(git status --porcelain | awk '{print $2}')
