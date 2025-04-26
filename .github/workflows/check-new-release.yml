@@ -269,25 +269,15 @@ jobs:
               fi
             fi
             
-            # GitHub Actions ワークフローファイルの更新
-            local workflow_pattern="version: ${major_version}\\.[0-9]"
-            local workflow_replace="version: ${short_version}"
-            for workflow in .github/workflows/docker-*.yml; do
-              if [[ -f "$workflow" ]]; then
-                if [[ "$DRY_RUN" != "true" ]]; then
-                  sed -i "s/$workflow_pattern/$workflow_replace/g" "$workflow" || {
-                    echo "::warning::Failed to update version in $workflow, but continuing..."
-                  }
-                else
-                  echo "dry run: $workflow 内の '$workflow_pattern' を '$workflow_replace' に更新"
-                fi
-              fi
-            done
+            # ワークフローファイルの更新部分を削除
+            # この部分を削除または以下のようにコメントアウト
+            echo "::notice::ワークフローファイルは手動更新が必要です: .github/workflows/docker-*.yml 内の version: ${major_version}.[x] を version: ${short_version} に更新してください"
             
             # PR本文に変更内容を追加
             PR_BODY+="*   **${type^}:** ${current_version} -> ${new_version}\n"
+            PR_BODY+="*   注意: ワークフローファイル(.github/workflows/docker-*.yml)は手動で更新する必要があります\n"
             
-            # 更新が成功したか確認（少なくともDockerfileは必須）- ドライランでは実行しない
+            # 更新が成功したか確認
             if [[ "$DRY_RUN" != "true" ]]; then
               if ! grep -q "ARG MYSQL_SHELL_VERSION=$new_version" docker/$type/Dockerfile; then
                 echo "::warning::Version update in docker/$type/Dockerfile might have failed, but we'll continue..."
@@ -350,6 +340,49 @@ jobs:
             echo "dry run: PR本文:"
             echo -e "$PR_BODY"
             echo "dry run終了: 実際の変更は行われていません。"
+          fi
+
+      # PR作成後に追加のメッセージを表示
+      - name: Show post-PR creation message
+        if: steps.check_versions.outputs.INNOVATION_UPDATE_NEEDED == 'true' || steps.check_versions.outputs.LTS_UPDATE_NEEDED == 'true'
+        run: |
+          # DRY_RUNがtrueでない場合のみ実行
+          if [[ "$DRY_RUN" != "true" ]]; then
+            echo "::group::ワークフローファイル更新手順"
+            echo "PR #xxx が作成されました。次に手動でワークフローファイルを更新してください。"
+            echo "1. PRブランチをローカルにチェックアウト:"
+            echo "   git fetch origin $BRANCH_NAME && git checkout $BRANCH_NAME"
+            echo ""
+            echo "2. 以下のコマンドでワークフローファイルを更新:"
+            
+            # Innovation更新の場合
+            if [[ "${{ steps.check_versions.outputs.INNOVATION_UPDATE_NEEDED }}" == "true" ]]; then
+              INNOVATION_MAJOR=$(echo "$LATEST_INNOVATION" | cut -d. -f1)
+              INNOVATION_MINOR=$(echo "$LATEST_INNOVATION" | cut -d. -f2)
+              INNOVATION_SHORT="${INNOVATION_MAJOR}.${INNOVATION_MINOR}"
+              echo "   # Innovation更新コマンド:"
+              echo "   find .github/workflows -name \"docker-*.yml\" -exec sed -i 's/version: ${INNOVATION_MAJOR}\.x/version: ${INNOVATION_SHORT}/g' {} \\;"
+            fi
+            
+            # LTS更新の場合
+            if [[ "${{ steps.check_versions.outputs.LTS_UPDATE_NEEDED }}" == "true" ]]; then
+              LTS_MAJOR=$(echo "$LATEST_LTS" | cut -d. -f1)
+              LTS_MINOR=$(echo "$LATEST_LTS" | cut -d. -f2)
+              LTS_SHORT="${LTS_MAJOR}.${LTS_MINOR}"
+              echo "   # LTS更新コマンド:"
+              echo "   find .github/workflows -name \"docker-*.yml\" -exec sed -i 's/version: ${LTS_MAJOR}\.x/version: ${LTS_SHORT}/g' {} \\;"
+            fi
+            
+            echo ""
+            echo "3. 変更をコミット:"
+            echo "   git add .github/workflows/"
+            echo "   git commit -m \"Update workflow files for MySQL Shell versions\""
+            echo ""
+            echo "4. 変更をプッシュ:"
+            echo "   git push origin $BRANCH_NAME"
+            echo ""
+            echo "これで既存のPRにワークフロー更新が追加されます。"
+            echo "::endgroup::"
           fi
 
       # ステップ6: 更新不要の場合の通知
