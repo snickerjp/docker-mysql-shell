@@ -7,8 +7,8 @@ name: Check for new MySQL Shell releases
 
 on:
   schedule:
-    # Run at 3:17 UTC daily (random time to distribute load)
-    - cron: '17 3 * * *'
+    # Run at 3:17 UTC every Friday (random time to distribute load)
+    - cron: '17 3 * * 5'
   workflow_dispatch: # Enable manual execution
     inputs:
       dry_run:
