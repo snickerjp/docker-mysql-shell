@@ -37,7 +37,7 @@ jobs:
         GH_APP_ID: ${{ secrets.GH_APP_ID }}
         GH_APP_INSTALLATION_ID: ${{ secrets.GH_APP_INSTALLATION_ID }}
         GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
-        SEARCH_QUERY: 'repo:snickerjp/docker-mysql-shell is:issue created:${{ env.last_month }} -reason:"not planned"'
+        SEARCH_QUERY: 'repo:snickerjp/docker-mysql-shell is:issue created:${{ env.last_month }} -reason:"not planned" -label:metrics -title:"Monthly issue metrics report" -title:"Monthly PR metrics report"'
 
 #    - name: Get user names from team
 #      run: |
@@ -52,6 +52,7 @@ jobs:
         title: Monthly issue metrics report
         token: ${{ secrets.GITHUB_TOKEN }}
         content-filepath: ./issue_metrics.md
+        labels: metrics
         #assignees: ${{ env.TEAM_MEMBERS }}
 
     - name: Report on PRs
@@ -66,3 +67,4 @@ jobs:
         title: Monthly PR metrics report
         token: ${{ secrets.GITHUB_TOKEN }}
         content-filepath: ./issue_metrics.md
+        labels: metrics
