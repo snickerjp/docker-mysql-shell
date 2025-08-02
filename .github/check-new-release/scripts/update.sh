@@ -38,6 +38,7 @@ update_version() {
   local new_version=$3
   local major_version=$(echo "$new_version" | cut -d. -f1)
   local minor_version=$(echo "$new_version" | cut -d. -f2)
+  local minor_version_old=$(echo "$current_version" | cut -d. -f2)
   local short_version="${major_version}.${minor_version}"
   
   echo "Updating $type to $new_version (major.minor: $short_version)..."
