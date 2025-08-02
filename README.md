@@ -3,7 +3,7 @@
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/314c46648b7a4b85a25edfeef95edad5)](https://app.codacy.com/gh/snickerjp/docker-mysql-shell?utm_source=github.com&utm_medium=referral&utm_content=snickerjp/docker-mysql-shell&utm_campaign=Badge_Grade_Settings)
 
 This repository contains Dockerfiles for MySQL Shell in two different series:
-- Innovation Series (9.3.x) - Latest features [(Dockerfile)](docker/innovation/Dockerfile)
+- Innovation Series (9.4.x) - Latest features [(Dockerfile)](docker/innovation/Dockerfile)
 - LTS Series (8.4.x) - Long Term Support [(Dockerfile)](docker/lts/Dockerfile)
 
 Both images are based on Debian 12 (slim) for minimal image size.
@@ -11,7 +11,7 @@ Both images are based on Debian 12 (slim) for minimal image size.
 ## Available Tags
 
 ### Innovation Series [(Dockerfile)](docker/innovation/Dockerfile)
-- `snickerjp/docker-mysql-shell:9.3` - Innovation series with specific version
+- `snickerjp/docker-mysql-shell:9.4` - Innovation series with specific version
 - `snickerjp/docker-mysql-shell:Innovation` - Latest Innovation series build
 
 ### LTS Series [(Dockerfile)](docker/lts/Dockerfile)
@@ -21,10 +21,10 @@ Both images are based on Debian 12 (slim) for minimal image size.
 
 ## Building the Images
 
-### Innovation Series (9.3.x) [(Dockerfile)](docker/innovation/Dockerfile)
+### Innovation Series (9.4.x) [(Dockerfile)](docker/innovation/Dockerfile)
 ```bash
 cd docker/innovation
-docker build -t snickerjp/docker-mysql-shell:9.3 .
+docker build -t snickerjp/docker-mysql-shell:9.4 .
 ```
 
 ### LTS Series (8.4.x) [(Dockerfile)](docker/lts/Dockerfile)
@@ -39,7 +39,7 @@ Run MySQL Shell container:
 
 ```bash
 # Innovation Series
-docker run -it snickerjp/docker-mysql-shell:9.3
+docker run -it snickerjp/docker-mysql-shell:9.4
 # or
 docker run -it snickerjp/docker-mysql-shell:Innovation
 
@@ -54,7 +54,7 @@ docker run -it snickerjp/docker-mysql-shell:latest
 To connect to a MySQL Server:
 ```bash
 # Innovation Series
-docker run -it snickerjp/docker-mysql-shell:9.3 --uri mysql://user:pass@host:port/schema
+docker run -it snickerjp/docker-mysql-shell:9.4 --uri mysql://user:pass@host:port/schema
 # or using Innovation tag
 docker run -it snickerjp/docker-mysql-shell:Innovation --uri mysql://user:pass@host:port/schema
 

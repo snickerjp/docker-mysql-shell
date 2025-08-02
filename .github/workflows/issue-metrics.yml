@@ -37,7 +37,7 @@ jobs:
         GH_APP_ID: ${{ secrets.GH_APP_ID }}
         GH_APP_INSTALLATION_ID: ${{ secrets.GH_APP_INSTALLATION_ID }}
         GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
-        SEARCH_QUERY: 'repo:snickerjp/docker-mysql-shell is:issue created:${{ env.last_month }} -reason:"not planned"'
+        SEARCH_QUERY: 'repo:snickerjp/docker-mysql-shell is:issue created:${{ env.last_month }} -reason:"not planned" -label:metrics -title:"Monthly issue metrics report" -title:"Monthly PR metrics report"'
 
 #    - name: Get user names from team
 #      run: |
@@ -48,11 +48,19 @@ jobs:
 
     - name: Create issue
       uses: peter-evans/create-issue-from-file@v5
+      id: create_issue_report # Ensure id is present
       with:
         title: Monthly issue metrics report
         token: ${{ secrets.GITHUB_TOKEN }}
         content-filepath: ./issue_metrics.md
+        labels: metrics # This line remains to keep labeling functionality
         #assignees: ${{ env.TEAM_MEMBERS }}
+
+    - name: Close issue report immediately
+      uses: peter-evans/close-issue@v3
+      with:
+        issue-number: ${{ steps.create_issue_report.outputs.issue-number }}
+        comment: 'Metrics report issue automatically closed after creation. Labels are retained.'
 
     - name: Report on PRs
       uses: github/issue-metrics@v3
@@ -62,7 +70,15 @@ jobs:
 
     - name: Create report for PRs
       uses: peter-evans/create-issue-from-file@v5
+      id: create_pr_report # Ensure id is present
       with:
         title: Monthly PR metrics report
         token: ${{ secrets.GITHUB_TOKEN }}
         content-filepath: ./issue_metrics.md
+        labels: metrics # This line remains to keep labeling functionality
+
+    - name: Close PR report immediately
+      uses: peter-evans/close-issue@v3
+      with:
+        issue-number: ${{ steps.create_pr_report.outputs.issue-number }}
+        comment: 'PR metrics report issue automatically closed after creation. Labels are retained.'
