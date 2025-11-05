@@ -24,7 +24,7 @@ Both images are based on Debian 12 (slim) for minimal image size.
 ### Innovation Series (9.5.x) [(Dockerfile)](docker/innovation/Dockerfile)
 ```bash
 cd docker/innovation
-docker build -t snickerjp/docker-mysql-shell:9.5 .
+docker build -t snickerjp/docker-mysql-shell:9 .
 ```
 
 ### LTS Series (8.4.x) [(Dockerfile)](docker/lts/Dockerfile)
@@ -39,7 +39,7 @@ Run MySQL Shell container:
 
 ```bash
 # Innovation Series
-docker run -it snickerjp/docker-mysql-shell:9.5
+docker run -it snickerjp/docker-mysql-shell:9
 # or
 docker run -it snickerjp/docker-mysql-shell:Innovation
 
@@ -54,7 +54,7 @@ docker run -it snickerjp/docker-mysql-shell:latest
 To connect to a MySQL Server:
 ```bash
 # Innovation Series
-docker run -it snickerjp/docker-mysql-shell:9.5 --uri mysql://user:pass@host:port/schema
+docker run -it snickerjp/docker-mysql-shell:9 --uri mysql://user:pass@host:port/schema
 # or using Innovation tag
 docker run -it snickerjp/docker-mysql-shell:Innovation --uri mysql://user:pass@host:port/schema
 
