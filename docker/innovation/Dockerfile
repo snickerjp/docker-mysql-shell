@@ -1,7 +1,7 @@
 FROM debian:12-slim
 
 ARG DEBIAN_FRONTEND=noninteractive
-ARG MYSQL_SHELL_VERSION=9.5.0
+ARG MYSQL_SHELL_VERSION=9.6.0
 
 # Create a user for the container
 RUN useradd -ms /bin/bash mysqlshelluser
