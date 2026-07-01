@@ -9,6 +9,7 @@ A minimal Docker image for MySQL Shell, based on Debian 13 (slim).
 
 - `snickerjp/docker-mysql-shell:9.7.1` — Full version (pinned)
 - `snickerjp/docker-mysql-shell:9.7` — Minor version (rolling update)
+- `snickerjp/docker-mysql-shell:Innovation` — Innovation series (rolling update)
 - `snickerjp/docker-mysql-shell:latest` — Latest version
 
 ### Deprecated Tags
@@ -16,7 +17,7 @@ A minimal Docker image for MySQL Shell, based on Debian 13 (slim).
 The following tags are deprecated and will no longer be updated:
 
 - `8.4`, `LTS` — Former LTS Series
-- `9.6`, `Innovation` — Former Innovation Series
+- `9.6` — Former Innovation Series
 
 ## Quick Start
 
