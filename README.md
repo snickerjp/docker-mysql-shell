@@ -1,91 +1,175 @@
-# Docker MySQL Shell Images
+# Docker MySQL Shell
 
-[![Codacy Badge](https://api.codacy.com/project/badge/Grade/314c46648b7a4b85a25edfeef95edad5)](https://app.codacy.com/gh/snickerjp/docker-mysql-shell?utm_source=github.com&utm_medium=referral&utm_content=snickerjp/docker-mysql-shell&utm_campaign=Badge_Grade_Settings)
+[![Build Test](https://github.com/snickerjp/docker-mysql-shell/actions/workflows/docker-build-test.yml/badge.svg)](https://github.com/snickerjp/docker-mysql-shell/actions/workflows/docker-build-test.yml)
+[![Build and Push](https://github.com/snickerjp/docker-mysql-shell/actions/workflows/docker-push.yml/badge.svg)](https://github.com/snickerjp/docker-mysql-shell/actions/workflows/docker-push.yml)
 
-This repository contains Dockerfiles for MySQL Shell in two different series:
-- Innovation Series (9.6.x) - Latest features [(Dockerfile)](docker/innovation/Dockerfile)
-- LTS Series (8.4.x) - Long Term Support [(Dockerfile)](docker/lts/Dockerfile)
-
-Both images are based on Debian 12 (slim) for minimal image size.
+MySQL Shell の Docker イメージです。Debian 13 (slim) ベースで最小限のイメージサイズを実現しています。
 
 ## Available Tags
 
-### Innovation Series [(Dockerfile)](docker/innovation/Dockerfile)
-- `snickerjp/docker-mysql-shell:9.6` - Innovation series with specific version
-- `snickerjp/docker-mysql-shell:Innovation` - Latest Innovation series build
+- `snickerjp/docker-mysql-shell:9.7.1` — フルバージョン（固定）
+- `snickerjp/docker-mysql-shell:9.7` — マイナーバージョン（ローリング更新）
+- `snickerjp/docker-mysql-shell:latest` — 最新バージョン
 
-### LTS Series [(Dockerfile)](docker/lts/Dockerfile)
-- `snickerjp/docker-mysql-shell:8.4` - LTS series with specific version
-- `snickerjp/docker-mysql-shell:LTS` - Latest LTS series build
-- `snickerjp/docker-mysql-shell:latest` - Same as LTS series
+### Deprecated Tags
 
-## Building the Images
+以下のタグは廃止されました。今後更新されません:
 
-### Innovation Series (9.6.x) [(Dockerfile)](docker/innovation/Dockerfile)
-```bash
-cd docker/innovation
-docker build -t snickerjp/docker-mysql-shell:9 .
-```
+- `8.4`, `LTS` — 旧 LTS Series
+- `9.6`, `Innovation` — 旧 Innovation Series
 
-### LTS Series (8.4.x) [(Dockerfile)](docker/lts/Dockerfile)
-```bash
-cd docker/lts
-docker build -t snickerjp/docker-mysql-shell:8.4 .
-```
-
-## Usage
-
-Run MySQL Shell container:
+## Quick Start
 
 ```bash
-# Innovation Series
-docker run -it snickerjp/docker-mysql-shell:9
-# or
-docker run -it snickerjp/docker-mysql-shell:Innovation
+# インタラクティブモードで起動
+docker run -it --rm snickerjp/docker-mysql-shell:latest
 
-# LTS Series
-docker run -it snickerjp/docker-mysql-shell:8.4
-# or
-docker run -it snickerjp/docker-mysql-shell:LTS
-# or
-docker run -it snickerjp/docker-mysql-shell:latest
+# MySQL Server に接続（クラシックプロトコル）
+docker run -it --rm snickerjp/docker-mysql-shell:latest \
+  --uri mysql://user:pass@host:3306/schema
+
+# MySQL Server に接続（X Protocol）
+docker run -it --rm snickerjp/docker-mysql-shell:latest \
+  --uri mysqlx://user:pass@host:33060/schema
 ```
 
-To connect to a MySQL Server:
+## Usage Examples
+
+### SQL モードで接続
+
 ```bash
-# Innovation Series
-docker run -it snickerjp/docker-mysql-shell:9 --uri mysql://user:pass@host:port/schema
-# or using Innovation tag
-docker run -it snickerjp/docker-mysql-shell:Innovation --uri mysql://user:pass@host:port/schema
-
-# LTS Series
-docker run -it snickerjp/docker-mysql-shell:8.4 --uri mysql://user:pass@host:port/schema
-# or using LTS tag
-docker run -it snickerjp/docker-mysql-shell:LTS --uri mysql://user:pass@host:port/schema
+docker run -it --rm snickerjp/docker-mysql-shell:latest \
+  --sql --uri mysql://root@host:3306
 ```
 
-## Development Workflow
+### JavaScript モードで起動
 
-### Branch Strategy
-
-- `feat-*`: Feature branches for new features and improvements
-- `develop`: Integration branch for feature branches
-- `main`: Release branch
-
-### Pull Request Process
-
-1. Create a new feature branch from `develop`:
 ```bash
-git checkout develop
-git pull origin develop
-git checkout -b feat-your-feature-name
+docker run -it --rm snickerjp/docker-mysql-shell:latest --js
 ```
 
-2. Make your changes and create a PR to `develop`
-3. After PR is merged to `develop`, it will be included in the next release PR
-4. Release PRs are automatically created from `develop` to `main` using git-pr-release
+### Python モードで起動
 
-### Protected Branches
+```bash
+docker run -it --rm snickerjp/docker-mysql-shell:latest --py
+```
 
-- `develop`: Requires PR review and successful status checks
-- `main`: Protected release branch, only accepts PRs from `develop`
+### SQL ファイルを実行
+
+```bash
+docker run -i --rm \
+  -v ./queries:/queries \
+  snickerjp/docker-mysql-shell:latest \
+  --sql --uri mysql://root@host:3306 -f /queries/setup.sql
+```
+
+### InnoDB Cluster の状態確認
+
+```bash
+docker run -it --rm snickerjp/docker-mysql-shell:latest \
+  --uri mysql://admin@host:3306 \
+  -- cluster status
+```
+
+### Docker Compose での利用
+
+```yaml
+services:
+  mysql:
+    image: mysql:9.7
+    environment:
+      MYSQL_ROOT_PASSWORD: example
+
+  mysqlsh:
+    image: snickerjp/docker-mysql-shell:latest
+    stdin_open: true
+    tty: true
+    command: ["--uri", "mysql://root:example@mysql:3306", "--sql"]
+    depends_on:
+      - mysql
+```
+
+## Command-Line Options
+
+このイメージの ENTRYPOINT は `mysqlsh` です。`docker run` の引数がそのまま `mysqlsh` のオプションとして渡されます。
+
+| オプション | 説明 |
+|-----------|------|
+| `--uri=<value>` | URI 形式で接続先を指定 (`mysql://user:pass@host:port/schema`) |
+| `--sql` | SQL モードで起動 |
+| `--js` | JavaScript モードで起動 |
+| `--py` | Python モードで起動 |
+| `-f, --file=<file>` | スクリプトファイルを実行 |
+| `-e, --execute=<cmd>` | コマンドを実行して終了 |
+| `--json[=pretty]` | JSON 形式で出力 |
+| `--quiet-start[={1\|2}]` | 起動時の情報出力を抑制 |
+| `--cluster` | InnoDB Cluster メンバーへの接続を保証 |
+| `--` | API Command Line（例: `-- util check-for-server-upgrade`） |
+
+全オプションは `docker run --rm snickerjp/docker-mysql-shell:latest --help` で確認できます。
+
+## Environment Variables
+
+このイメージ自体はカスタム環境変数を定義していません。`mysqlsh` が参照する代表的な環境変数:
+
+| 環境変数 | 説明 | デフォルト |
+|---------|------|-----------|
+| `MYSQL_PWD` | MySQL パスワード（非推奨、`--password` を使用） | なし |
+| `MYSQL_TCP_PORT` | デフォルトの TCP ポート | `3306` |
+| `MYSQL_HOST` | デフォルトのホスト | なし |
+| `MYSQL_UNIX_PORT` | Unix ソケットのパス | なし |
+
+### 使用例
+
+```bash
+# 色出力を無効化
+docker run -it --rm -e MYSQLSH_TERM_COLOR_MODE=nocolor \
+  snickerjp/docker-mysql-shell:latest --uri mysql://root@host:3306
+
+# 設定ディレクトリをマウント
+docker run -it --rm \
+  -v ./mysqlsh-config:/home/mysqlshelluser/.mysqlsh \
+  snickerjp/docker-mysql-shell:latest
+```
+
+## Volumes
+
+| パス | 用途 |
+|------|------|
+| `/home/mysqlshelluser/.mysqlsh` | MySQL Shell 設定・履歴ディレクトリ |
+| 任意のマウントポイント | SQL スクリプトやSSL証明書の配置用 |
+
+## Ports
+
+このイメージはポートを EXPOSE していません。MySQL Shell はクライアントツールであり、サーバーとして Listen しません。
+
+## Building
+
+```bash
+cd docker
+docker build -t snickerjp/docker-mysql-shell:9.7 .
+```
+
+## How It Works
+
+### 自動バージョン更新
+
+毎週金曜日に [check-new-release](.github/workflows/check-new-release.yml) ワークフローが実行され、
+MySQL Shell の新しいバージョンが利用可能になると自動で PR が作成されます。
+
+### Docker Image Push
+
+PR がマージされると [docker-push](.github/workflows/docker-push.yml) ワークフローが発火し、
+複数のタグで Docker Hub にイメージが push されます。
+
+### Dockerfile
+
+- [`docker/Dockerfile`](docker/Dockerfile) — 単一の Dockerfile でバージョン管理
+
+## Architecture
+
+- **Base image:** Debian 13 slim
+- **Platform:** linux/amd64
+- **Non-root user:** `mysqlshelluser` で実行
+- **ENTRYPOINT:** `mysqlsh`
+- **Default CMD:** `--version`
