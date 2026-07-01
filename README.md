@@ -79,6 +79,11 @@ services:
     image: mysql:9.7
     environment:
       MYSQL_ROOT_PASSWORD: example
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   mysqlsh:
     image: snickerjp/docker-mysql-shell:latest
@@ -86,7 +91,8 @@ services:
     tty: true
     command: ["--uri", "mysql://root:example@mysql:3306", "--sql"]
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
 ```
 
 ## Command-Line Options
