@@ -1,0 +1,31 @@
+name: Build Test
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docker/**'
+      - '.github/workflows/docker-build-test.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build (no push)
+        uses: docker/build-push-action@v7
+        with:
+          context: ./docker
+          push: false
+          load: true
+          tags: snickerjp/docker-mysql-shell:test
+
+      - name: Verify image works
+        run: |
+          docker run --rm snickerjp/docker-mysql-shell:test --version
