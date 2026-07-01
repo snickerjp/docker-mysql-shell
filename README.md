@@ -3,58 +3,58 @@
 [![Build Test](https://github.com/snickerjp/docker-mysql-shell/actions/workflows/docker-build-test.yml/badge.svg)](https://github.com/snickerjp/docker-mysql-shell/actions/workflows/docker-build-test.yml)
 [![Build and Push](https://github.com/snickerjp/docker-mysql-shell/actions/workflows/docker-push.yml/badge.svg)](https://github.com/snickerjp/docker-mysql-shell/actions/workflows/docker-push.yml)
 
-MySQL Shell の Docker イメージです。Debian 13 (slim) ベースで最小限のイメージサイズを実現しています。
+A minimal Docker image for MySQL Shell, based on Debian 13 (slim).
 
 ## Available Tags
 
-- `snickerjp/docker-mysql-shell:9.7.1` — フルバージョン（固定）
-- `snickerjp/docker-mysql-shell:9.7` — マイナーバージョン（ローリング更新）
-- `snickerjp/docker-mysql-shell:latest` — 最新バージョン
+- `snickerjp/docker-mysql-shell:9.7.1` — Full version (pinned)
+- `snickerjp/docker-mysql-shell:9.7` — Minor version (rolling update)
+- `snickerjp/docker-mysql-shell:latest` — Latest version
 
 ### Deprecated Tags
 
-以下のタグは廃止されました。今後更新されません:
+The following tags are deprecated and will no longer be updated:
 
-- `8.4`, `LTS` — 旧 LTS Series
-- `9.6`, `Innovation` — 旧 Innovation Series
+- `8.4`, `LTS` — Former LTS Series
+- `9.6`, `Innovation` — Former Innovation Series
 
 ## Quick Start
 
 ```bash
-# インタラクティブモードで起動
+# Run in interactive mode
 docker run -it --rm snickerjp/docker-mysql-shell:latest
 
-# MySQL Server に接続（クラシックプロトコル）
+# Connect to MySQL Server (Classic Protocol)
 docker run -it --rm snickerjp/docker-mysql-shell:latest \
   --uri mysql://user:pass@host:3306/schema
 
-# MySQL Server に接続（X Protocol）
+# Connect to MySQL Server (X Protocol)
 docker run -it --rm snickerjp/docker-mysql-shell:latest \
   --uri mysqlx://user:pass@host:33060/schema
 ```
 
 ## Usage Examples
 
-### SQL モードで接続
+### Connect in SQL mode
 
 ```bash
 docker run -it --rm snickerjp/docker-mysql-shell:latest \
   --sql --uri mysql://root@host:3306
 ```
 
-### JavaScript モードで起動
+### Start in JavaScript mode
 
 ```bash
 docker run -it --rm snickerjp/docker-mysql-shell:latest --js
 ```
 
-### Python モードで起動
+### Start in Python mode
 
 ```bash
 docker run -it --rm snickerjp/docker-mysql-shell:latest --py
 ```
 
-### SQL ファイルを実行
+### Execute a SQL file
 
 ```bash
 docker run -i --rm \
@@ -63,7 +63,7 @@ docker run -i --rm \
   --sql --uri mysql://root@host:3306 -f /queries/setup.sql
 ```
 
-### InnoDB Cluster の状態確認
+### Check InnoDB Cluster status
 
 ```bash
 docker run -it --rm snickerjp/docker-mysql-shell:latest \
@@ -71,7 +71,7 @@ docker run -it --rm snickerjp/docker-mysql-shell:latest \
   -- cluster status
 ```
 
-### Docker Compose での利用
+### Docker Compose
 
 ```yaml
 services:
@@ -91,42 +91,42 @@ services:
 
 ## Command-Line Options
 
-このイメージの ENTRYPOINT は `mysqlsh` です。`docker run` の引数がそのまま `mysqlsh` のオプションとして渡されます。
+The ENTRYPOINT of this image is `mysqlsh`. Arguments passed to `docker run` are forwarded directly as `mysqlsh` options.
 
-| オプション | 説明 |
-|-----------|------|
-| `--uri=<value>` | URI 形式で接続先を指定 (`mysql://user:pass@host:port/schema`) |
-| `--sql` | SQL モードで起動 |
-| `--js` | JavaScript モードで起動 |
-| `--py` | Python モードで起動 |
-| `-f, --file=<file>` | スクリプトファイルを実行 |
-| `-e, --execute=<cmd>` | コマンドを実行して終了 |
-| `--json[=pretty]` | JSON 形式で出力 |
-| `--quiet-start[={1\|2}]` | 起動時の情報出力を抑制 |
-| `--cluster` | InnoDB Cluster メンバーへの接続を保証 |
-| `--` | API Command Line（例: `-- util check-for-server-upgrade`） |
+| Option | Description |
+|--------|-------------|
+| `--uri=<value>` | Connect using URI format (`mysql://user:pass@host:port/schema`) |
+| `--sql` | Start in SQL mode |
+| `--js` | Start in JavaScript mode |
+| `--py` | Start in Python mode |
+| `-f, --file=<file>` | Execute a script file |
+| `-e, --execute=<cmd>` | Execute a command and exit |
+| `--json[=pretty]` | Output in JSON format |
+| `--quiet-start[={1\|2}]` | Suppress startup information |
+| `--cluster` | Ensure connection to an InnoDB Cluster member |
+| `--` | API Command Line (e.g. `-- util check-for-server-upgrade`) |
 
-全オプションは `docker run --rm snickerjp/docker-mysql-shell:latest --help` で確認できます。
+For all options, run `docker run --rm snickerjp/docker-mysql-shell:latest --help`.
 
 ## Environment Variables
 
-このイメージ自体はカスタム環境変数を定義していません。`mysqlsh` が参照する代表的な環境変数:
+This image does not define custom environment variables. The following are standard variables recognized by `mysqlsh`:
 
-| 環境変数 | 説明 | デフォルト |
-|---------|------|-----------|
-| `MYSQL_PWD` | MySQL パスワード（非推奨、`--password` を使用） | なし |
-| `MYSQL_TCP_PORT` | デフォルトの TCP ポート | `3306` |
-| `MYSQL_HOST` | デフォルトのホスト | なし |
-| `MYSQL_UNIX_PORT` | Unix ソケットのパス | なし |
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MYSQL_PWD` | MySQL password (deprecated, use `--password`) | None |
+| `MYSQL_TCP_PORT` | Default TCP port | `3306` |
+| `MYSQL_HOST` | Default host | None |
+| `MYSQL_UNIX_PORT` | Unix socket path | None |
 
-### 使用例
+### Examples
 
 ```bash
-# 色出力を無効化
+# Disable color output
 docker run -it --rm -e MYSQLSH_TERM_COLOR_MODE=nocolor \
   snickerjp/docker-mysql-shell:latest --uri mysql://root@host:3306
 
-# 設定ディレクトリをマウント
+# Mount config directory
 docker run -it --rm \
   -v ./mysqlsh-config:/home/mysqlshelluser/.mysqlsh \
   snickerjp/docker-mysql-shell:latest
@@ -134,14 +134,14 @@ docker run -it --rm \
 
 ## Volumes
 
-| パス | 用途 |
-|------|------|
-| `/home/mysqlshelluser/.mysqlsh` | MySQL Shell 設定・履歴ディレクトリ |
-| 任意のマウントポイント | SQL スクリプトやSSL証明書の配置用 |
+| Path | Purpose |
+|------|---------|
+| `/home/mysqlshelluser/.mysqlsh` | MySQL Shell configuration and history |
+| Any mount point | For SQL scripts or SSL certificates |
 
 ## Ports
 
-このイメージはポートを EXPOSE していません。MySQL Shell はクライアントツールであり、サーバーとして Listen しません。
+This image does not EXPOSE any ports. MySQL Shell is a client tool and does not listen as a server.
 
 ## Building
 
@@ -152,24 +152,22 @@ docker build -t snickerjp/docker-mysql-shell:9.7 .
 
 ## How It Works
 
-### 自動バージョン更新
+### Automatic Version Updates
 
-毎週金曜日に [check-new-release](.github/workflows/check-new-release.yml) ワークフローが実行され、
-MySQL Shell の新しいバージョンが利用可能になると自動で PR が作成されます。
+Every Friday, the [check-new-release](.github/workflows/check-new-release.yml) workflow runs and automatically creates a PR when a new MySQL Shell version is available.
 
 ### Docker Image Push
 
-PR がマージされると [docker-push](.github/workflows/docker-push.yml) ワークフローが発火し、
-複数のタグで Docker Hub にイメージが push されます。
+When a PR is merged, the [docker-push](.github/workflows/docker-push.yml) workflow pushes the image to Docker Hub with multiple tags.
 
 ### Dockerfile
 
-- [`docker/Dockerfile`](docker/Dockerfile) — 単一の Dockerfile でバージョン管理
+- [`docker/Dockerfile`](docker/Dockerfile) — Single Dockerfile for version management
 
 ## Architecture
 
 - **Base image:** Debian 13 slim
 - **Platform:** linux/amd64
-- **Non-root user:** `mysqlshelluser` で実行
+- **Non-root user:** `mysqlshelluser`
 - **ENTRYPOINT:** `mysqlsh`
 - **Default CMD:** `--version`
