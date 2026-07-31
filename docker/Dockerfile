@@ -1,7 +1,7 @@
 FROM debian:13-slim
 
 ARG DEBIAN_FRONTEND=noninteractive
-ARG MYSQL_SHELL_VERSION=9.7.1
+ARG MYSQL_SHELL_VERSION=26.7.0
 ARG DEBIAN_VERSION=debian13
 
 # Create a user for the container
