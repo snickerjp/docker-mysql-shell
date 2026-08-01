@@ -90,7 +90,7 @@ jobs:
 
       - name: Set up Docker Buildx
         if: steps.check.outputs.update == 'true'
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build test (verify new version builds)
         if: steps.check.outputs.update == 'true'
