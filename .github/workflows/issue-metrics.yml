@@ -12,6 +12,7 @@ jobs:
   build:
     name: issue metrics
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       issues: write
       pull-requests: read
@@ -32,7 +33,7 @@ jobs:
         echo "last_month=$first_day..$last_day" >> "$GITHUB_ENV"
 
     - name: Run issue-metrics tool
-      uses: github-community-projects/issue-metrics@v5
+      uses: github-community-projects/issue-metrics@671528652402b9b8a33da44b5c693b3161bc090f # v5
       env:
         GH_APP_ID: ${{ secrets.GH_APP_ID }}
         GH_APP_INSTALLATION_ID: ${{ secrets.GH_APP_INSTALLATION_ID }}
@@ -47,7 +48,7 @@ jobs:
 #          GITHUB_TOKEN: ${{ secrets.CUSTOM_TOKEN }}
 
     - name: Create issue
-      uses: peter-evans/create-issue-from-file@v6
+      uses: peter-evans/create-issue-from-file@fca9117c27cdc29c6c4db3b86c48e4115a786710 # v6
       id: create_issue_report # Ensure id is present
       with:
         title: Monthly issue metrics report
@@ -57,19 +58,19 @@ jobs:
         #assignees: ${{ env.TEAM_MEMBERS }}
 
     - name: Close issue report immediately
-      uses: peter-evans/close-issue@v3
+      uses: peter-evans/close-issue@05dff7ca07116e5707cfb3a3cd4af7bb5e43524c # v3
       with:
         issue-number: ${{ steps.create_issue_report.outputs.issue-number }}
         comment: 'Metrics report issue automatically closed after creation. Labels are retained.'
 
     - name: Report on PRs
-      uses: github-community-projects/issue-metrics@v5
+      uses: github-community-projects/issue-metrics@671528652402b9b8a33da44b5c693b3161bc090f # v5
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         SEARCH_QUERY: 'repo:snickerjp/docker-mysql-shell is:pr created:${{ env.last_month }} -is:draft'
 
     - name: Create report for PRs
-      uses: peter-evans/create-issue-from-file@v6
+      uses: peter-evans/create-issue-from-file@fca9117c27cdc29c6c4db3b86c48e4115a786710 # v6
       id: create_pr_report # Ensure id is present
       with:
         title: Monthly PR metrics report
@@ -78,7 +79,7 @@ jobs:
         labels: metrics # This line remains to keep labeling functionality
 
     - name: Close PR report immediately
-      uses: peter-evans/close-issue@v3
+      uses: peter-evans/close-issue@05dff7ca07116e5707cfb3a3cd4af7bb5e43524c # v3
       with:
         issue-number: ${{ steps.create_pr_report.outputs.issue-number }}
         comment: 'PR metrics report issue automatically closed after creation. Labels are retained.'
